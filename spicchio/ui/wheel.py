@@ -343,30 +343,39 @@ class Wheel(QWidget):
         p.setOpacity(1.0)
 
     def _paint_sides(self, p: QPainter, c: QPointF, open_t: float) -> None:
-        """Under the centre: which side is showing, and that Shift turns the wheel."""
-        names = [SIDE_NAMES[name] for name, _ in self.sides]
-        font = S.font(10.5, QFont.Weight.DemiBold)
+        """Under the centre, a small capsule: ⇧ + the side showing + one dot per side.
+
+        Compact on purpose, so it never touches the pills, and on its own dark
+        surface, so it reads on light and dark desktops alike.
+        """
+        name = SIDE_NAMES[self.sides[self.side][0]].upper()
+        font = S.font(10, QFont.Weight.DemiBold)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.3)
         fm = QFontMetricsF(font)
-        gap = 14.0
-        widths = [fm.horizontalAdvance(n.upper()) + 1.2 * len(n) for n in names]
-        total = sum(widths) + gap * (len(names) - 1)
-        x = c.x() - total / 2
-        y = c.y() + CORE + 20
-        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.2)
-        p.setFont(font)
+        n = len(self.sides)
+        dots_w = n * 5 + (n - 1) * 4
+        w = 14 + 10 + 6 + fm.horizontalAdvance(name) + 8 + dots_w + 12
+        h = 22.0
+        r = QRectF(c.x() - w / 2, c.y() + CORE + 14, w, h)
         p.setOpacity(open_t)
-        for k, (name, w) in enumerate(zip(names, widths, strict=True)):
-            active = k == self.side
-            p.setPen(S.TANGERINE if active else S.with_alpha(S.TEXT, 0.42))
-            p.drawText(QRectF(x, y - 8, w, 16), Qt.AlignmentFlag.AlignCenter, name.upper())
-            if active:
-                p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(S.TANGERINE)
-                p.drawEllipse(QPointF(x + w / 2, y + 12), 2.0, 2.0)
-            x += w + gap
-        p.setPen(S.with_alpha(S.TEXT, 0.35))
-        p.setFont(S.font(10))
-        p.drawText(QRectF(c.x() - 90, y + 16, 180, 14), Qt.AlignmentFlag.AlignCenter, "Shift  ·  Tab  ·  scroll")
+        p.setPen(QPen(S.HAIRLINE, 1.0))
+        p.setBrush(QColor(22, 21, 26, 240))
+        p.drawRoundedRect(r, h / 2, h / 2)
+        x = r.left() + 12
+        p.setFont(S.font(11, QFont.Weight.DemiBold))
+        p.setPen(S.with_alpha(S.TEXT, 0.55))
+        p.drawText(QRectF(x, r.top(), 12, h), Qt.AlignmentFlag.AlignCenter, "⇧")
+        x += 18
+        p.setFont(font)
+        p.setPen(S.TANGERINE)
+        tw = fm.horizontalAdvance(name)
+        p.drawText(QRectF(x, r.top(), tw + 2, h), Qt.AlignmentFlag.AlignVCenter, name)
+        x += tw + 8
+        p.setPen(Qt.PenStyle.NoPen)
+        for k in range(n):
+            p.setBrush(S.TANGERINE if k == self.side else S.with_alpha(S.TEXT, 0.28))
+            p.drawEllipse(QPointF(x + 2.5, r.center().y()), 2.5, 2.5)
+            x += 9
         p.setOpacity(1.0)
 
     def _core_text(self) -> tuple[str, str]:
