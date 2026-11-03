@@ -20,7 +20,7 @@ from spicchio.geometry import angle_of, label_point, point_at, slice_at, slices
 OUTER = 150   # radius of the visible ring (logical px)
 INNER = 66    # radius of the hole with the action name
 REACH = 120   # how far beyond the ring a direction still selects a slice
-SHADOW = 34
+SHADOW = 26
 GROW = 12     # how much the chosen slice grows outwards
 GAP_DEG = 1.4
 
@@ -226,7 +226,7 @@ class Wheel(QWidget):
 
     def _paint_ring(self, p: QPainter, c: QPointF) -> None:
         shadow = QRadialGradient(c, OUTER + SHADOW)
-        shadow.setColorAt((OUTER - 8) / (OUTER + SHADOW), QColor(0, 0, 0, 110))
+        shadow.setColorAt((OUTER - 6) / (OUTER + SHADOW), QColor(0, 0, 0, 70))
         shadow.setColorAt(1.0, QColor(0, 0, 0, 0))
         p.setBrush(shadow)
         p.drawEllipse(QPointF(c.x(), c.y() + 8), OUTER + SHADOW, OUTER + SHADOW)
@@ -234,7 +234,8 @@ class Wheel(QWidget):
         body = QRadialGradient(c, OUTER)
         body.setColorAt(INNER / OUTER, RING_IN)
         body.setColorAt(1.0, RING_OUT)
-        p.fillPath(_sector(c, INNER, OUTER, 0, 359.999), body)
+        p.setBrush(body)
+        p.drawEllipse(c, OUTER, OUTER)  # a full disc: no see-through gap around the centre
 
         # hairlines: light from above on the outer edge, a darker lip on the inner one
         p.setBrush(Qt.BrushStyle.NoBrush)
