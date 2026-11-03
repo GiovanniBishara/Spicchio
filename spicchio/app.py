@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import sys
 import threading
 from pathlib import Path
@@ -140,4 +141,12 @@ def run_app() -> int:
         return 1
     spicchio = SpicchioApp(app)
     spicchio.start()
+
+    # Ctrl+C in the terminal: Qt's event loop runs in C++ and Python only handles signals
+    # when it gets control back, so wake it up a few times a second.
+    signal.signal(signal.SIGINT, lambda *_: spicchio.quit())
+    wake = QTimer()
+    wake.timeout.connect(lambda: None)
+    wake.start(250)
+    print("Spicchio is running. Drag a file and press Shift. Ctrl+C or the tray menu to quit.")
     return app.exec()
