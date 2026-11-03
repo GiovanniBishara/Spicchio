@@ -46,17 +46,32 @@ def test_output_never_writes_through_a_dangling_link(photo: Path, tmp_path: Path
 
 
 @needs_links
-def test_zip_leaves_out_links_to_the_rest_of_the_disk(tmp_path: Path):
+def test_zip_packs_the_whole_folder_but_not_links_to_the_rest_of_the_disk(tmp_path: Path):
     secret = tmp_path / "secret" / "id_ed25519"
     secret.parent.mkdir()
     secret.write_text("PRIVATE KEY")
     folder = tmp_path / "project"
-    folder.mkdir()
+    (folder / "docs").mkdir(parents=True)
     (folder / "notes.txt").write_text("hello")
-    (folder / "key").symlink_to(secret)
-    (folder / "loop").symlink_to(folder, target_is_directory=True)
-    (z,) = get("any.zip")([folder])
-    assert zipfile.ZipFile(z).namelist() == ["project/notes.txt"]
+    (folder / "docs" / "guide.md").write_text("# guide")
+    (folder / "latest.txt").symlink_to(folder / "notes.txt")          # inside: packed
+    (folder / "manual").symlink_to(folder / "docs", target_is_directory=True)  # inside: packed
+    (folder / "key").symlink_to(secret)                                 # outside: left out, and said so
+    (folder / "loop").symlink_to(folder, target_is_directory=True)      # back to the top: no endless zip
+    result = get("any.zip")([folder])
+    names = sorted(zipfile.ZipFile(result[0]).namelist())
+    assert names == ["project/docs/guide.md", "project/latest.txt", "project/manual/guide.md", "project/notes.txt"]
+    assert result.note == "Left out 1 link to files outside the folder: key"
+
+
+@needs_links
+def test_a_link_you_drop_yourself_is_zipped(tmp_path: Path):
+    real = tmp_path / "real.txt"
+    real.write_text("mine")
+    link = tmp_path / "shortcut.txt"
+    link.symlink_to(real)
+    result = get("any.zip")([link])
+    assert zipfile.ZipFile(result[0]).read("shortcut.txt") == b"mine" and result.note == ""
 
 
 def test_spreadsheet_formulas_arrive_as_text(tmp_path: Path):

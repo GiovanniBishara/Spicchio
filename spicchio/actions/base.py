@@ -30,6 +30,14 @@ class Done:
     clipboard: str | None = None
 
 
+class Saved(list):
+    """The files an action created, plus an optional note for the notification."""
+
+    def __init__(self, paths=(), note: str = "") -> None:
+        super().__init__(paths)
+        self.note = note
+
+
 Result = list[Path] | Done
 # An action receives the dropped files and returns the files it created (or a Done).
 Runner = Callable[[Sequence[Path]], Result]

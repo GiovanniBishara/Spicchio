@@ -5,13 +5,12 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-import os
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
 
-from spicchio.actions.base import Action, ActionError, Done, each, register
+from spicchio.actions.base import Action, ActionError, Done, Saved, each, register
 from spicchio.files import Kind, output_path
 from spicchio.safety import find_program, windows_program
 
@@ -89,24 +88,52 @@ def json_to_csv(path: Path) -> Path:
     return out
 
 
-def zip_files(paths: list[Path]) -> list[Path]:
+def _folder_entries(folder: Path, skipped: list[Path]):
+    """Every file in ``folder`` with its name inside the zip.
+
+    Links are followed when they point inside the folder (they are part of it).
+    A link that points outside is left out and reported: zipping a folder you got
+    from someone must not quietly pack your own files (a link to ~/.ssh, say).
+    """
+    root = folder.resolve()
+
+    def walk(here: Path, arc: Path, above: frozenset[Path]):
+        for child in sorted(here.iterdir(), key=lambda c: c.name.lower()):
+            name = arc / child.name
+            if child.is_symlink():
+                target = child.resolve()
+                if not target.exists() or not target.is_relative_to(root):
+                    skipped.append(child)
+                    continue
+            if child.is_dir():
+                real = child.resolve()
+                if real in above:  # a link back up the tree would make an endless zip
+                    continue
+                yield from walk(child, name, above | {real})
+            elif child.is_file():
+                yield child, name
+
+    yield from walk(folder, Path(folder.name), frozenset({root}))
+
+
+def zip_files(paths: list[Path]) -> Saved:
     name = paths[0].stem if len(paths) == 1 else f"{paths[0].stem}-and-{len(paths) - 1}-more"
     out = output_path(paths[0].with_name(name + ".zip"), ".zip")
+    skipped: list[Path] = []
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        for p in paths:
+        for p in paths:  # what you dropped yourself is always packed, link or not
             if p.is_dir():
-                # Links inside a folder are skipped: they could point anywhere on the disk
-                # (your SSH keys, say) and would end up in a zip you then send to someone.
-                for root, dirs, files in os.walk(p, followlinks=False):
-                    dirs.sort()
-                    for name in sorted(files):
-                        child = Path(root, name)
-                        if child.is_symlink() or not child.is_file() or child == out:
-                            continue
-                        zf.write(child, Path(p.name) / child.relative_to(p))
+                for child, arc in _folder_entries(p, skipped):
+                    if child.resolve() != out.resolve():
+                        zf.write(child, arc)
             else:
                 zf.write(p, p.name)
-    return [out]
+    note = ""
+    if skipped:
+        names = ", ".join(s.name for s in skipped[:3]) + ("…" if len(skipped) > 3 else "")
+        what = "1 link" if len(skipped) == 1 else f"{len(skipped)} links"
+        note = f"Left out {what} to files outside the folder: {names}"
+    return Saved([out], note)
 
 
 def checksum(path: Path) -> Path:

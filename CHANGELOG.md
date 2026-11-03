@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.1 (unreleased)
+
+- **ZIP keeps the whole folder**: links inside the folder are packed too. Only a link that points outside the folder is left out, and the notification names it instead of skipping it silently.
+
+## 0.2.0
 
 - **A new wheel: a ring of tangerine slices.** The slices unfold from the core; the one you point at lifts out in tangerine.
 - **Hardened against hostile files**: image and PDF bombs, playlists disguised as videos, spreadsheet formulas in JSON, symbolic links, planted programs. Undo leaves alone a result you edited. See [SECURITY.md](SECURITY.md).

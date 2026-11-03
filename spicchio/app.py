@@ -32,11 +32,12 @@ class Bridge(QObject):
 
 
 def _summary(outputs: list[Path]) -> tuple[str, str, Path]:
+    note = getattr(outputs, "note", "")  # e.g. links left out of a zip: said, never silent
     if len(outputs) == 1:
-        return f"Saved {outputs[0].name}", str(outputs[0].parent), outputs[0]
+        return f"Saved {outputs[0].name}", note or str(outputs[0].parent), outputs[0]
     folders = {o.parent for o in outputs}
     where = next(iter(folders)) if len(folders) == 1 else outputs[0].parent
-    return f"Saved {len(outputs)} files", str(where), outputs[0]
+    return f"Saved {len(outputs)} files", note or str(where), outputs[0]
 
 
 class SpicchioApp:
