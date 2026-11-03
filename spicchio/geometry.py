@@ -45,7 +45,12 @@ def slice_at(dx: float, dy: float, n: int, inner: float, outer: float) -> int | 
     return int(((angle_of(dx, dy) + sweep / 2) % 360) // sweep)
 
 
+def point_at(angle: float, radius: float) -> tuple[float, float]:
+    """Offset from the centre of the point at ``angle`` (clockwise from 12 o'clock) and ``radius``."""
+    a = math.radians(angle)
+    return radius * math.sin(a), -radius * math.cos(a)
+
+
 def label_point(s: Slice, radius: float) -> tuple[float, float]:
     """Where to draw a slice's label: on its middle direction, at ``radius`` from the centre."""
-    a = math.radians(s.middle)
-    return radius * math.sin(a), -radius * math.cos(a)
+    return point_at(s.middle, radius)

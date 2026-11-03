@@ -82,9 +82,9 @@ def to_wav(path: Path) -> Path:
     return out
 
 
-register(Action("video.mp4", "MP4", VIDEO, each(to_mp4), skip_ext=frozenset({".mp4"}), available=has_ffmpeg))
-register(Action("video.compress", "Compress", VIDEO, each(compress_video), available=has_ffmpeg))
-register(Action("video.gif", "GIF", VIDEO, each(to_gif), available=has_ffmpeg))
-register(Action("video.mute", "Mute", VIDEO, each(mute), available=has_ffmpeg))
-register(Action("media.mp3", "MP3", MEDIA, each(to_mp3), skip_ext=frozenset({".mp3"}), available=has_ffmpeg))
-register(Action("audio.wav", "WAV", AUDIO, each(to_wav), skip_ext=frozenset({".wav"}), available=has_ffmpeg))
+register(Action("video.mp4", "MP4", VIDEO, each(to_mp4), skip_ext=frozenset({".mp4"}), available=has_ffmpeg, title="Convert to MP4"))
+register(Action("video.compress", "Compress", VIDEO, each(compress_video), available=has_ffmpeg, title="Make it smaller"))
+register(Action("video.gif", "GIF", VIDEO, each(to_gif), available=has_ffmpeg, title="First 10 s as GIF"))
+register(Action("video.mute", "Mute", VIDEO, each(mute), available=has_ffmpeg, title="Remove the audio"))
+register(Action("media.mp3", "MP3", MEDIA, each(to_mp3), skip_ext=frozenset({".mp3"}), available=has_ffmpeg, title="Extract MP3"))
+register(Action("audio.wav", "WAV", AUDIO, each(to_wav), skip_ext=frozenset({".wav"}), available=has_ffmpeg, title="Convert to WAV"))

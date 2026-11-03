@@ -31,6 +31,12 @@ class Action:
     skip_ext: frozenset[str] = field(default_factory=frozenset)
     # An optional check, e.g. "is ffmpeg installed?".
     available: Callable[[], bool] = lambda: True
+    # Longer description shown in the middle of the wheel ("Convert to PDF"). Defaults to the label.
+    title: str = ""
+
+    @property
+    def headline(self) -> str:
+        return self.title or self.label
 
     def applies_to(self, paths: Sequence[Path]) -> bool:
         if len(paths) < self.min_files or not self.available():

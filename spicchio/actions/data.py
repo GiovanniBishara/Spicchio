@@ -79,7 +79,7 @@ def checksum(path: Path) -> Path:
     return out
 
 
-register(Action("data.json", "JSON", frozenset({Kind.DATA}), each(csv_to_json), skip_ext=frozenset({".json"})))
-register(Action("data.csv", "CSV", frozenset({Kind.DATA}), each(json_to_csv), skip_ext=frozenset({".csv"})))
-register(Action("any.zip", "ZIP", ANY, zip_files, mode="many"))
-register(Action("any.sha256", "SHA-256", ANY, each(checksum)))
+register(Action("data.json", "JSON", frozenset({Kind.DATA}), each(csv_to_json), skip_ext=frozenset({".json"}), title="Convert to JSON"))
+register(Action("data.csv", "CSV", frozenset({Kind.DATA}), each(json_to_csv), skip_ext=frozenset({".csv"}), title="Convert to CSV"))
+register(Action("any.zip", "ZIP", ANY, zip_files, mode="many", title="Zip it"))
+register(Action("any.sha256", "SHA-256", ANY, each(checksum), title="SHA-256 checksum"))

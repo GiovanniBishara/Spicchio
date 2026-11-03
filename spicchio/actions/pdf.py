@@ -117,9 +117,9 @@ def to_text(path: Path) -> Path:
     return out
 
 
-register(Action("pdf.merge", "Merge", PDF, merge, mode="many", min_files=2))
-register(Action("pdf.png", "Images", PDF, each(to_images)))
-register(Action("pdf.compress", "Compress", PDF, each(compress)))
-register(Action("pdf.split", "Split pages", PDF, each(split)))
-register(Action("pdf.rotate", "Rotate", PDF, each(rotate)))
-register(Action("pdf.text", "Text", PDF, each(to_text)))
+register(Action("pdf.merge", "Merge", PDF, merge, mode="many", min_files=2, title="Merge into one PDF"))
+register(Action("pdf.png", "Images", PDF, each(to_images), title="Pages to PNG"))
+register(Action("pdf.compress", "Compress", PDF, each(compress), title="Make it smaller"))
+register(Action("pdf.split", "Split pages", PDF, each(split), title="One PDF per page"))
+register(Action("pdf.rotate", "Rotate", PDF, each(rotate), title="Rotate 90°"))
+register(Action("pdf.text", "Text", PDF, each(to_text), title="Extract the text"))

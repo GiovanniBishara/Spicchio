@@ -28,6 +28,14 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest -q
+      - name: Render the wheel
+        if: matrix.python == '3.13'
+        run: python scripts/render_wheel.py renders
+      - uses: actions/upload-artifact@v4
+        if: matrix.python == '3.13'
+        with:
+          name: wheel-renders-${{ runner.os }}
+          path: renders/
 
   build:
     needs: test

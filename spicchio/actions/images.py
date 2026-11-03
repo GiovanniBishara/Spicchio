@@ -100,10 +100,10 @@ def strip_metadata(path: Path) -> Path:
     return out
 
 
-register(Action("img.pdf", "PDF", IMG, to_pdf, mode="many"))
-register(Action("img.png", "PNG", IMG, each(to_png), skip_ext=frozenset({".png"})))
-register(Action("img.jpg", "JPG", IMG, each(to_jpg), skip_ext=frozenset({".jpg", ".jpeg"})))
-register(Action("img.webp", "WebP", IMG, each(to_webp), skip_ext=frozenset({".webp"})))
-register(Action("img.compress", "Compress", IMG, each(compress)))
-register(Action("img.half", "Half size", IMG, each(half_size)))
-register(Action("img.clean", "No metadata", IMG, each(strip_metadata)))
+register(Action("img.pdf", "PDF", IMG, to_pdf, mode="many", title="Convert to PDF"))
+register(Action("img.png", "PNG", IMG, each(to_png), skip_ext=frozenset({".png"}), title="Convert to PNG"))
+register(Action("img.jpg", "JPG", IMG, each(to_jpg), skip_ext=frozenset({".jpg", ".jpeg"}), title="Convert to JPG"))
+register(Action("img.webp", "WebP", IMG, each(to_webp), skip_ext=frozenset({".webp"}), title="Convert to WebP"))
+register(Action("img.compress", "Compress", IMG, each(compress), title="Make it smaller"))
+register(Action("img.half", "Half size", IMG, each(half_size), title="Resize to 50%"))
+register(Action("img.clean", "No metadata", IMG, each(strip_metadata), title="Remove EXIF and GPS"))
