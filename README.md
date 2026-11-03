@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/wheel-render.png" width="460" alt="The Spicchio wheel: an image is being dropped on the PDF slice, and 'Convert to PDF' is written in the middle">
+  <img src="docs/demo.gif" width="760" alt="A photo is dragged out of a folder, Shift opens the Spicchio wheel, Shift again turns it to Tools, the photo is dropped on 'Under 1 MB' and a 980 KB copy appears next to the original">
 </p>
 
 *Spicchio* is Italian for a slice of a tangerine.
@@ -44,6 +44,10 @@
 3. Allow Spicchio in **System Settings → Privacy & Security → Accessibility** and **Input Monitoring**, then open it again. The tangerine appears in the menu bar.
 
 ## How to use
+
+<p align="center">
+  <img src="docs/wheel-render.png" width="640" alt="The wheel on a light and a dark desktop: Convert with PDF chosen, and Tools with 'Under 1 MB' chosen">
+</p>
 
 1. **Start dragging a file** (or several) from Explorer, Finder or the desktop. Keep the mouse button down.
 2. **Tap Shift.** The wheel opens under the cursor with only the actions that make sense for those files.
