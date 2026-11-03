@@ -1,0 +1,35 @@
+name: Wheel renders
+
+# Renders the wheel on Windows (real Segoe UI fonts) and publishes the images
+# on the `renders` branch, so the design can be reviewed without running the app.
+on:
+  push:
+    branches: [main]
+    paths: ["spicchio/ui/**", "spicchio/actions/**", "scripts/render_wheel.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - run: python scripts/render_wheel.py renders
+      - name: Publish on the renders branch
+        shell: bash
+        run: |
+          cd renders
+          git init -q -b renders
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -q -m "Wheel renders for ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" renders
