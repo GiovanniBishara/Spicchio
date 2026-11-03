@@ -1,9 +1,10 @@
 name: Release
 
-# Push a tag like v0.1.0 to publish a GitHub Release with the Windows and macOS apps.
+# Publish a release on GitHub (Releases → Draft a new release → tag v0.1.0 → Publish):
+# this workflow builds the Windows and macOS apps and attaches them to it.
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -12,7 +13,7 @@ jobs:
   build:
     uses: ./.github/workflows/build.yml
 
-  publish:
+  attach:
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -21,9 +22,8 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Create the release
+      - name: Attach the apps to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" dist/Spicchio-windows.zip dist/Spicchio-macOS.zip \
-            --title "Spicchio $GITHUB_REF_NAME" --notes-file docs/release-notes.md
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/Spicchio-windows.zip dist/Spicchio-macOS.zip --clobber

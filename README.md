@@ -142,7 +142,7 @@ ruff check .
 python scripts/render_wheel.py renders   # PNG renders of the wheel, the notification and the icon
 ```
 
-CI runs lint and tests on Windows, macOS and Linux, builds the Windows and macOS apps, and renders the design on Windows (see the `renders` branch). Pushing a tag like `v0.2.0` publishes a release with both apps.
+CI runs lint and tests on Windows, macOS and Linux, builds the Windows and macOS apps, and renders the design on Windows (see the `renders` branch). Publishing a release on GitHub attaches both apps to it automatically.
 
 ## Roadmap
 
