@@ -2,14 +2,15 @@
 
 ![Spicchio demo](https://raw.githubusercontent.com/GiovanniBishara/Spicchio/main/docs/demo.gif)
 
-### What's new in 0.2
+The first release of Spicchio: a ring of tangerine slices that opens under your cursor while you drag a file.
 
-- **A new wheel: a ring of tangerine slices.** They unfold from the core; the one you point at lifts out in tangerine.
-- **Three sides: Convert, Tools, Actions.** Tap Shift again (or Tab, or scroll) to turn the wheel.
-- **Undo** in the notification: results go to the Recycle Bin, never the originals.
-- **New actions**: iPhone photos (HEIC), Windows icon (ICO), **Under 1 MB** for images and **Under 20 MB** for videos, video Snapshot, M4A and FLAC, Copy path, Terminal here.
-- **Recent results** in the tray menu, and a small "working" note for long jobs.
-- **Security**: hostile files (image and PDF bombs, playlists disguised as videos, formulas hidden in data, symbolic links, planted programs) are handled. Details in [SECURITY.md](https://github.com/GiovanniBishara/Spicchio/blob/main/SECURITY.md).
+- **Images** (including iPhone HEIC): PDF, JPG, PNG, WebP, ICO · Compress, **Under 1 MB**, Half size, Remove metadata
+- **PDF**: pages to images, text · Merge, Compress, Split pages, Rotate
+- **Video and audio** (with ffmpeg): MP4, GIF, MP3, M4A, WAV, FLAC · Compress, **Under 20 MB**, Snapshot, Mute
+- **Data**: CSV ↔ JSON · **Any file or folder**: ZIP, Copy path, Terminal here, SHA-256
+- Three sides on the wheel (**Convert, Tools, Actions**): tap Shift again to turn it
+- The original is never touched; **Undo** sends results to the Recycle Bin
+- Offline, and hardened against hostile files: see [SECURITY.md](https://github.com/GiovanniBishara/Spicchio/blob/main/SECURITY.md)
 
 ### Download
 

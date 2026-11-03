@@ -1,20 +1,16 @@
 # Changelog
 
-## 0.2.1 (unreleased)
+## 1.0.0
 
-- **ZIP keeps the whole folder**: links inside the folder are packed too. Only a link that points outside the folder is left out, and the notification names it instead of skipping it silently.
+First release.
 
-## 0.2.0
-
-- **A new wheel: a ring of tangerine slices.** The slices unfold from the core; the one you point at lifts out in tangerine.
-- **Hardened against hostile files**: image and PDF bombs, playlists disguised as videos, spreadsheet formulas in JSON, symbolic links, planted programs. Undo leaves alone a result you edited. See [SECURITY.md](SECURITY.md).
-- **Verifiable releases**: SHA-256 checksums attached to every release; CI runs pip-audit; Dependabot keeps dependencies and actions up to date.
-- **Three sides on the wheel: Convert, Tools, Actions.** Tap Shift again, press Tab or scroll to turn it. Each side keeps to a few slices, so nothing is crowded.
-- **Undo**: the notification has an Undo button that sends the results to the Recycle Bin (never the originals).
-- **Working note** for long jobs: the wheel steps aside and a small notification with a spinner shows progress.
-- **Recent results** in the tray menu.
-- New: iPhone photos (HEIC), Windows icon (ICO), **Under 1 MB** for images and **Under 20 MB** for videos (email-ready), video **Snapshot**, audio **M4A** and **FLAC**, **Copy path**, **Terminal here**.
-
-## 0.1.0
-
-First release: Shift-drag wheel with image, PDF, video, audio and data conversions; tray app; Windows and macOS (beta) builds.
+- **The wheel**: drag a file, tap Shift, and a ring of tangerine slices opens under the cursor. Choose by direction; the slice you point at lifts out in tangerine.
+- **Three sides: Convert, Tools, Actions.** Tap Shift again, press Tab or scroll to turn the wheel.
+- **Images** (including iPhone HEIC): PDF, JPG, PNG, WebP, ICO; Compress, Under 1 MB, Half size, Remove metadata.
+- **PDF**: pages to images, text; Merge, Compress, Split pages, Rotate.
+- **Video and audio** (with ffmpeg): MP4, GIF, MP3, M4A, WAV, FLAC; Compress, Under 20 MB, Snapshot, Mute.
+- **Data**: CSV ↔ JSON. **Any file or folder**: ZIP, Copy path, Terminal here, SHA-256.
+- **Never touches the original**: results are saved next to it, nothing is overwritten. **Undo** sends results to the Recycle Bin.
+- **Tray app** with recent results, pause, start with Windows. A small "working" note for long jobs.
+- **Security**: offline, and hardened against hostile files (image and PDF bombs, playlists disguised as videos, formulas hidden in data, symbolic links, planted programs). See [SECURITY.md](SECURITY.md).
+- **Verifiable builds**: Windows and macOS (experimental) apps built by GitHub Actions, with SHA-256 checksums.
