@@ -28,6 +28,10 @@
 2. While you are still holding the mouse button, tap **Shift**. A wheel opens under the cursor, with only the actions that make sense for that file.
 3. Drop the file on a slice. The result is saved **next to the original**, which is never modified or overwritten (`photo.pdf`, then `photo (1).pdf`...).
 
+<p align="center"><img src="docs/wheel-render.png" width="420" alt="The real wheel: the PDF slice is chosen and its name, Convert to PDF, is written in the middle"></p>
+
+Slices are picked by **direction**: keep moving towards a slice, even past the ring, so the file preview Windows draws next to the cursor never hides the labels. The chosen action is spelled out in the middle.
+
 Dropping in the middle, or pressing **Esc**, cancels. A notification tells you what was created; click it to see the file in Explorer.
 
 ## What it can do
