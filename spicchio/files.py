@@ -9,6 +9,8 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
+from spicchio.safety import free
+
 
 class Kind(str, Enum):
     IMAGE = "image"
@@ -40,13 +42,17 @@ def kind_of(path: Path) -> Kind:
 
 
 def unique_path(path: Path) -> Path:
-    """Return ``path`` if it is free, otherwise ``stem (n).suffix`` with the first free n."""
-    if not path.exists():
+    """Return ``path`` if it is free, otherwise ``stem (n).suffix`` with the first free n.
+
+    "Free" includes dangling symbolic links: writing through one would create a
+    file somewhere else entirely.
+    """
+    if free(path):
         return path
     n = 1
     while True:
         candidate = path.with_name(f"{path.stem} ({n}){path.suffix}")
-        if not candidate.exists():
+        if free(candidate):
             return candidate
         n += 1
 

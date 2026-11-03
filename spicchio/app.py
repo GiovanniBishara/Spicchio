@@ -17,7 +17,7 @@ from spicchio.actions import Action, ActionError, Done
 from spicchio.trigger import DragShiftDetector, GlobalListener
 from spicchio.ui.icon import app_icon
 from spicchio.ui.toast import Toast, reveal
-from spicchio.undo import undo
+from spicchio.undo import stamps, undo
 
 SLOW_MS = 600  # show "Working…" only for jobs that take longer than this
 
@@ -152,12 +152,13 @@ class SpicchioApp:
         if not result:
             return
         title, body, target = _summary(result)
+        written = stamps(result)
         self.recent.append((f"{action.headline}: {target.name}", target))
-        self.toast.show_message(title, body, target=target, undo=lambda: self._undo(result, sources), ms=6000)
+        self.toast.show_message(title, body, target=target, undo=lambda: self._undo(result, sources, written), ms=6000)
 
-    def _undo(self, outputs: list[Path], sources: list[Path]) -> None:
+    def _undo(self, outputs: list[Path], sources: list[Path], written) -> None:
         try:
-            n = undo(outputs, sources)
+            n = undo(outputs, sources, written=written)
         except Exception as exc:
             self.toast.show_message("Undo failed", str(exc), error=True)
             return

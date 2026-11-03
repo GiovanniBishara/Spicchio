@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import warnings
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -19,11 +20,18 @@ except ImportError:  # pragma: no cover
 
 IMG = frozenset({Kind.IMAGE})
 
+# Decompression bombs: a tiny file that claims to be gigapixels wide. Pillow warns
+# above MAX_IMAGE_PIXELS; Spicchio refuses instead (120 MP still fits big panoramas).
+Image.MAX_IMAGE_PIXELS = 120_000_000
+warnings.simplefilter("error", Image.DecompressionBombWarning)
+
 
 def _open(path: Path) -> Image.Image:
     try:
         img = Image.open(path)
         img.load()
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+        raise ActionError(f"{path.name} is too large to open safely") from exc
     except Exception as exc:  # Pillow raises many different errors for broken files
         raise ActionError(f"Can't read {path.name} as an image") from exc
     # Respect the camera orientation, then forget the EXIF flag.

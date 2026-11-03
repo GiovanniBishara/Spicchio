@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-import shutil
+import os
 import subprocess
 import sys
 import zipfile
@@ -13,8 +13,38 @@ from pathlib import Path
 
 from spicchio.actions.base import Action, ActionError, Done, each, register
 from spicchio.files import Kind, output_path
+from spicchio.safety import find_program, windows_program
 
 ANY = frozenset(Kind)
+MAX_TEXT_BYTES = 200_000_000  # CSV/JSON are read into memory: refuse absurd sizes up front
+
+# A cell starting with one of these is a formula for Excel and LibreOffice:
+# "=HYPERLINK(...)" in someone else's JSON must arrive as text, not run.
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _read_text(path: Path) -> str:
+    if path.stat().st_size > MAX_TEXT_BYTES:
+        raise ActionError(f"{path.name} is too large (over 200 MB)")
+    try:
+        return path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ActionError(f"{path.name} is not UTF-8 text") from exc
+
+
+def _number(text: str) -> bool:
+    try:
+        float(text)
+        return True
+    except ValueError:
+        return False
+
+
+def safe_cell(value):
+    """Neutralise spreadsheet formulas: ``=1+1`` becomes ``'=1+1``. Numbers like ``-5`` stay as they are."""
+    if isinstance(value, str) and value.startswith(_FORMULA_START) and not _number(value):
+        return "'" + value
+    return value
 
 
 def _sniff_dialect(sample: str) -> type[csv.Dialect] | csv.Dialect:
@@ -25,7 +55,7 @@ def _sniff_dialect(sample: str) -> type[csv.Dialect] | csv.Dialect:
 
 
 def csv_to_json(path: Path) -> Path:
-    text = path.read_text(encoding="utf-8-sig")
+    text = _read_text(path)
     rows = list(csv.DictReader(text.splitlines(), dialect=_sniff_dialect(text[:4096])))
     if not rows:
         raise ActionError(f"{path.name} has no rows")
@@ -36,9 +66,11 @@ def csv_to_json(path: Path) -> Path:
 
 def json_to_csv(path: Path) -> Path:
     try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        data = json.loads(_read_text(path))
     except json.JSONDecodeError as exc:
         raise ActionError(f"{path.name} is not valid JSON (line {exc.lineno})") from exc
+    except RecursionError as exc:
+        raise ActionError(f"{path.name} is nested too deeply") from exc
     if isinstance(data, dict):
         # {"items": [...]} is common: use the first list of objects we find.
         data = next((v for v in data.values() if isinstance(v, list)), [data])
@@ -49,10 +81,10 @@ def json_to_csv(path: Path) -> Path:
         columns.extend(k for k in row if k not in columns)
     out = output_path(path, ".csv")
     with out.open("w", encoding="utf-8-sig", newline="") as f:  # BOM so Excel opens accents correctly
-        writer = csv.DictWriter(f, fieldnames=columns)
+        writer = csv.DictWriter(f, fieldnames=[safe_cell(c) for c in columns])
         writer.writeheader()
         for row in data:
-            writer.writerow({k: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v
+            writer.writerow({safe_cell(k): safe_cell(json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v)
                              for k, v in row.items()})
     return out
 
@@ -63,8 +95,15 @@ def zip_files(paths: list[Path]) -> list[Path]:
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for p in paths:
             if p.is_dir():
-                for child in sorted(p.rglob("*")):
-                    zf.write(child, Path(p.name) / child.relative_to(p))
+                # Links inside a folder are skipped: they could point anywhere on the disk
+                # (your SSH keys, say) and would end up in a zip you then send to someone.
+                for root, dirs, files in os.walk(p, followlinks=False):
+                    dirs.sort()
+                    for name in sorted(files):
+                        child = Path(root, name)
+                        if child.is_symlink() or not child.is_file() or child == out:
+                            continue
+                        zf.write(child, Path(p.name) / child.relative_to(p))
             else:
                 zf.write(p, p.name)
     return [out]
@@ -90,16 +129,21 @@ def copy_path(paths: list[Path]) -> Done:
 
 def terminal_here(paths: list[Path]) -> Done:
     folder = paths[0] if paths[0].is_dir() else paths[0].parent
+    # The folder is only ever the working directory or a separate argument, never
+    # part of a command line, so a folder name can't smuggle in a command.
     try:
         if sys.platform == "win32":
-            if shutil.which("wt"):
-                subprocess.Popen(["wt", "-d", str(folder)])
+            if wt := find_program("wt"):
+                subprocess.Popen([wt, "-d", str(folder)])
             else:
-                subprocess.Popen(["powershell", "-NoExit"], cwd=folder, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                shell = windows_program("System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+                subprocess.Popen([shell, "-NoExit"], cwd=folder, creationflags=subprocess.CREATE_NEW_CONSOLE)
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", "-a", "Terminal", str(folder)])
+            subprocess.Popen(["/usr/bin/open", "-a", "Terminal", str(folder)])
+        elif term := find_program("x-terminal-emulator"):
+            subprocess.Popen([term], cwd=folder)
         else:
-            subprocess.Popen(["x-terminal-emulator"], cwd=folder)
+            raise ActionError("No terminal found on this system")
     except OSError as exc:
         raise ActionError("Can't open a terminal on this system") from exc
     return Done("Terminal opened", str(folder))

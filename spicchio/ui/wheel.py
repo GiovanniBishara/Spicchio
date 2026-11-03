@@ -293,9 +293,26 @@ class Wheel(QWidget):
         ring.addEllipse(c, INNER, INNER)
         p.setOpacity(open_t)
         p.setPen(QPen(S.HAIRLINE, 1.0))
-        p.setBrush(S.with_alpha(S.INK, 0.55))
+        p.setBrush(S.with_alpha(S.INK, 0.4))
         p.drawPath(ring)
         p.setOpacity(1.0)
+
+    def _paint_ring_shadow(self, p: QPainter, c: QPointF, t: float) -> None:
+        """One soft shadow for the whole fruit, outside it only: the cuts between slices stay clean."""
+        if t <= 0:
+            return
+        r = RING * (0.72 + 0.28 * _ease_out_back(t, 1.2))
+        outside = QPainterPath()
+        outside.addRect(QRectF(self.rect()))
+        disc = QPainterPath()
+        disc.addEllipse(c, r, r)
+        p.save()
+        p.setClipPath(outside.subtracted(disc))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for width, alpha in ((18, 7), (10, 14), (4, 24)):
+            p.setPen(QPen(QColor(0, 0, 0, round(alpha * _ease_out(t))), width))
+            p.drawEllipse(QPointF(c.x(), c.y() + 4), r, r)
+        p.restore()
 
     def _slice_progress(self, i: int, now: float) -> float:
         if self._still:
@@ -305,6 +322,7 @@ class Wheel(QWidget):
     def _paint_slices(self, p: QPainter, c: QPointF, now: float) -> None:
         n = len(self.actions)
         anyone = self.hover is not None
+        self._paint_ring_shadow(p, c, self._slice_progress(n - 1, now))
         order = sorted(range(n), key=lambda i: self._sel[i] if i < len(self._sel) else 0.0)  # chosen on top
         geometry = slices(n)
         for i in order:
@@ -323,13 +341,13 @@ class Wheel(QWidget):
             p.scale(grow, grow)
             p.setOpacity(_ease_out(t))
 
-            # shadow below, then a tangerine glow when chosen
+            # the chosen slice is lifted: its own shadow, then a tangerine glow
             p.setBrush(Qt.BrushStyle.NoBrush)
-            for width, alpha in ((14, 10), (8, 18), (3, 30)):
-                p.setPen(QPen(QColor(0, 0, 0, alpha), width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
-                              Qt.PenJoinStyle.RoundJoin))
-                p.drawPath(path.translated(0, 4))
             if g > 0.01:
+                for width, alpha in ((10, 14), (4, 26)):
+                    p.setPen(QPen(QColor(0, 0, 0, round(alpha * g)), width, Qt.PenStyle.SolidLine,
+                                  Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+                    p.drawPath(path.translated(0, 5))
                 for width, alpha in ((26, 0.10), (14, 0.16), (6, 0.24)):
                     p.setPen(QPen(S.with_alpha(S.TANGERINE, alpha * g), width, Qt.PenStyle.SolidLine,
                                   Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))

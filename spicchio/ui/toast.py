@@ -15,6 +15,7 @@ from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
+from spicchio.safety import find_program, windows_program
 from spicchio.ui import style as S
 from spicchio.ui.icon import paint_mark
 
@@ -25,11 +26,11 @@ def reveal(path: Path) -> None:
     """Open the folder and select the file."""
     try:
         if sys.platform == "win32":
-            subprocess.Popen(["explorer", f"/select,{path}"])
+            subprocess.Popen([windows_program("explorer.exe"), f"/select,{path}"])
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", "-R", str(path)])
-        else:
-            subprocess.Popen(["xdg-open", str(path.parent)])
+            subprocess.Popen(["/usr/bin/open", "-R", str(path)])
+        elif opener := find_program("xdg-open"):
+            subprocess.Popen([opener, str(path.parent)])
     except OSError:
         pass
 

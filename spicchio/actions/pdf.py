@@ -8,6 +8,7 @@ from spicchio.actions.base import Action, ActionError, each, register
 from spicchio.files import Kind, output_dir, output_path
 
 PDF = frozenset({Kind.PDF})
+RENDER_PIXELS = 40_000_000  # per page: a crafted page size can't ask for gigabytes of memory
 
 
 def _reader(path: Path):
@@ -102,7 +103,9 @@ def to_images(path: Path) -> list[Path]:
         width = len(str(n))
         targets = [folder / f"{path.stem}-{i:0{width}d}.png" for i in range(1, n + 1)]
     for page, target in zip(doc, targets, strict=True):
-        page.render(scale=2).to_pil().save(target, "PNG", optimize=True)
+        w, h = page.get_size()  # points
+        scale = min(2.0, (RENDER_PIXELS / max(w * h, 1.0)) ** 0.5)
+        page.render(scale=scale).to_pil().save(target, "PNG", optimize=True)
     doc.close()
     return targets
 

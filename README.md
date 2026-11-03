@@ -78,6 +78,13 @@ To cancel, drop in the middle or press **Esc**. Long jobs (a video, say) move to
 
 Video and audio actions appear only if [ffmpeg](https://ffmpeg.org) is installed: `winget install ffmpeg` on Windows, `brew install ffmpeg` on macOS. Everything runs **offline** on your computer.
 
+## Privacy and security
+
+- **Offline, always.** No internet connection, no telemetry, no account. Your files never leave your computer.
+- **Originals are only read.** Results are new files next to them; nothing is ever overwritten.
+- **Hostile files are expected.** Image and PDF bombs, media files that are playlists in disguise, formulas hidden in data, symbolic links and planted programs are all handled: see [SECURITY.md](SECURITY.md).
+- **Verifiable downloads.** The apps are built by GitHub Actions from the public source, and each release lists their SHA-256 checksums.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -114,6 +121,7 @@ spicchio/
 ├── trigger.py      when to open: a tiny state machine fed by global mouse/keyboard hooks (pynput)
 ├── geometry.py     pure maths of the wheel: which action lies in the pointer's direction
 ├── files.py        file kinds and collision-free output paths
+├── safety.py       programs by absolute path only, never writing through links
 ├── actions/        one module per family; each action declares which files it accepts
 │   ├── base.py     Action model and registry
 │   ├── images.py   Pillow
@@ -148,7 +156,7 @@ ruff check .
 python scripts/render_wheel.py renders   # PNG renders of the wheel, the notification and the icon
 ```
 
-CI runs lint and tests on Windows, macOS and Linux, builds the Windows and macOS apps, and renders the design on Windows (see the `renders` branch). Publishing a release on GitHub attaches both apps to it automatically.
+CI runs lint, tests (including hostile inputs, `tests/test_security.py`) and `pip-audit` on Windows, macOS and Linux, builds the Windows and macOS apps, and renders the design on Windows (see the `renders` branch). Publishing a release on GitHub attaches both apps to it automatically.
 
 ## Roadmap
 

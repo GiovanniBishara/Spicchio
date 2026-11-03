@@ -17,14 +17,15 @@ classifiers = [
   "Environment :: Win32 (MS Windows)",
   "Topic :: Utilities",
 ]
+# Floors at versions with the known security fixes for malformed files (CI runs pip-audit too).
 dependencies = [
-  "Pillow>=10.0",
-  "pypdf>=4.0",
-  "pypdfium2>=4.20",
+  "Pillow>=11.3",
+  "pypdf>=6.1",
+  "pypdfium2>=4.30",
   "PySide6-Essentials>=6.6",  # QtCore, QtGui, QtWidgets only: ~85 MB instead of ~260 MB
   "pynput>=1.7.6",
-  "Send2Trash>=1.8",
-  "pillow-heif>=0.16",
+  "Send2Trash>=1.8.3",
+  "pillow-heif>=0.18",
 ]
 
 [project.optional-dependencies]
