@@ -54,10 +54,16 @@ def main(out: Path) -> None:
         ("image-compress", [photo], 4, False),
         ("pdf-split", [pdf], 2, False),
         ("image-busy", [photo], 0, True),
+        ("image-tools", [photo], 1, False),
+        ("image-actions", [photo], 0, False),
     ]
     for name, files, hover, busy in states:
         w = Wheel()
         w.set_files(files)
+        if name.endswith("-tools"):
+            w.turn(1)
+        elif name.endswith("-actions"):
+            w.turn(2)
         w.set_hover(hover)
         w.busy = busy
         w.freeze()
@@ -68,6 +74,12 @@ def main(out: Path) -> None:
     on_backgrounds(t.grab().toImage(), out, "toast")
     t.show_message("PDF failed", "contract.pdf is password protected", error=True, ms=10)
     on_backgrounds(t.grab().toImage(), out, "toast-error")
+    t.hide()
+    t.show_message("Saved holiday-photo.pdf", r"C:\Users\Gio\Pictures\Holidays", undo=lambda: None, ms=10)
+    on_backgrounds(t.grab().toImage(), out, "toast-undo")
+    t.hide()
+    t.show_message("Ready for email…", "holiday.mov", busy=True, ms=10)
+    on_backgrounds(t.grab().toImage(), out, "toast-busy")
 
     icon = QImage(256, 256, QImage.Format.Format_ARGB32)
     icon.fill(0)

@@ -3,7 +3,8 @@
 Rule: the left button is held, the mouse has moved more than a few pixels
 (so the user is dragging something), and Shift is pressed. The wheel opens
 under the cursor; releasing the button closes it (after the drop has been
-handled by the wheel window itself).
+handled by the wheel window itself). While it is open, Shift again, Tab or the
+mouse wheel turn it to its next side (Convert, Tools, Actions).
 
 The logic is a small state machine fed with plain events, so it can be
 tested without a mouse. ``GlobalListener`` connects it to the real mouse
@@ -23,6 +24,7 @@ DRAG_THRESHOLD = 12  # px the pointer must travel before a press counts as a dra
 class DragShiftDetector:
     on_open: Callable[[int, int], None]
     on_close: Callable[[], None]
+    on_turn: Callable[[int], None] = lambda step: None  # next/previous side of the wheel
     threshold: float = DRAG_THRESHOLD
     enabled: bool = True
 
@@ -56,12 +58,24 @@ class DragShiftDetector:
         if self._shift_held:
             return  # ignore key repeat while Shift stays down
         self._shift_held = True
-        if self.enabled and self._dragging and not self._open:
+        if not self.enabled or not self._dragging:
+            return
+        if self._open:
+            self.on_turn(1)  # Shift again: turn the wheel to its next side
+        else:
             self._open = True
             self.on_open(*self._pos)
 
     def shift_up(self) -> None:
         self._shift_held = False
+
+    def tab(self) -> None:
+        if self._open:
+            self.on_turn(1)
+
+    def scroll(self, dy: int) -> None:
+        if self._open and dy:
+            self.on_turn(-1 if dy > 0 else 1)
 
     def escape(self) -> None:
         if self._open:
@@ -94,11 +108,16 @@ class GlobalListener:
         def on_move(x, y):
             d.move(int(x), int(y))
 
+        def on_scroll(x, y, dx, dy):
+            d.scroll(dy)
+
         shifts = {keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r}
 
         def on_press(key):
             if key in shifts:
                 d.shift_down()
+            elif key == keyboard.Key.tab:
+                d.tab()
             elif key == keyboard.Key.esc:
                 d.escape()
 
@@ -106,7 +125,7 @@ class GlobalListener:
             if key in shifts:
                 d.shift_up()
 
-        self._mouse = mouse.Listener(on_click=on_click, on_move=on_move)
+        self._mouse = mouse.Listener(on_click=on_click, on_move=on_move, on_scroll=on_scroll)
         self._keyboard = keyboard.Listener(on_press=on_press, on_release=on_release)
         self._mouse.start()
         self._keyboard.start()

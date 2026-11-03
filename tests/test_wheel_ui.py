@@ -45,3 +45,16 @@ def test_direction_beyond_the_circle_still_chooses(qapp):
     assert slice_at(0, -(RING + REACH - 5), 4, DEAD, RING + REACH) == 0
     assert slice_at(RING + 60, 0, 4, DEAD, RING + REACH) == 1
     assert slice_at(10, 10, 4, DEAD, RING + REACH) is None
+
+
+def test_turning_shows_the_next_side_and_keeps_the_direction(qapp, photo):
+    w = Wheel()
+    w.set_files([photo])
+    assert [name for name, _ in w.sides] == ["convert", "tools", "actions"]
+    first = [a.id for a in w.actions]
+    w._last_vec = (0.0, -(RING + 10))  # pointer resting straight up
+    w.turn(1)
+    assert w.side == 1 and [a.id for a in w.actions] != first
+    assert w.hover == 0  # still pointing up: the first pill of the new side is chosen
+    w.turn(-1)
+    assert w.side == 0

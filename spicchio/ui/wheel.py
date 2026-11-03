@@ -14,15 +14,15 @@ from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen, QRadialGradient
 from PySide6.QtWidgets import QWidget
 
-from spicchio.actions import Action, actions_for
+from spicchio.actions import SIDE_NAMES, Action, sides_for
 from spicchio.geometry import angle_of, point_at, slice_at, slices
 from spicchio.ui import dragimage
 from spicchio.ui import style as S
 
-RING = 124        # radius of the circle the pills sit on
+RING = 136        # radius of the circle the pills sit on
 CORE = 50         # radius of the central disc
 DEAD = 40         # inside this radius nothing is chosen: dropping there cancels
-REACH = 112       # how far beyond the circle a direction still chooses a pill
+REACH = 104       # how far beyond the circle a direction still chooses a pill
 PILL_H = 34
 STAGGER_MS = 26
 FLY_MS = 360
@@ -51,7 +51,10 @@ class Wheel(QWidget):
         self.setFixedSize(side, side)
 
         self.paths: list[Path] = []
+        self.sides: list[tuple[str, list[Action]]] = []
+        self.side = 0
         self.actions: list[Action] = []
+        self._last_vec: tuple[float, float] | None = None
         self.hover: int | None = None
         self.pointer_angle: float | None = None
         self.busy = False
@@ -101,11 +104,28 @@ class Wheel(QWidget):
 
     def set_files(self, paths: list[Path]) -> None:
         self.paths = paths
-        self.actions = actions_for(paths)
-        self.hover = None
-        self.pointer_angle = None
+        self.sides = sides_for(paths)
+        self.side = 0
+        self._last_vec = None
+        self._apply_side()
+
+    def turn(self, step: int) -> None:
+        """Show the next (or previous) side of the wheel: Convert, Tools, Actions."""
+        if len(self.sides) < 2 or self.busy:
+            return
+        self.side = (self.side + step) % len(self.sides)
+        self._apply_side()
+        self._tick.start()
+
+    def _apply_side(self) -> None:
+        self.actions = self.sides[self.side][1] if self.sides else []
         self._sel = [0.0] * len(self.actions)
         self._pills_at = self._now()
+        self.hover = None
+        self.pointer_angle = None
+        if self._last_vec is not None:  # the pointer may not move again before the drop
+            dx, dy = self._last_vec
+            self.hover = slice_at(dx, dy, len(self.actions), DEAD, RING + REACH)
         self.update()
 
     def set_hover(self, index: int | None) -> None:
@@ -166,6 +186,7 @@ class Wheel(QWidget):
         p = event.position()
         c = self.rect().center()
         dx, dy = p.x() - c.x(), p.y() - c.y()
+        self._last_vec = (dx, dy)
         new = slice_at(dx, dy, len(self.actions), DEAD, RING + REACH)
         self.pointer_angle = angle_of(dx, dy) if new is not None else None
         if new != self.hover:
@@ -211,6 +232,8 @@ class Wheel(QWidget):
         if self.actions:
             self._paint_pills(p, c, now)
         self._paint_core(p, c, open_t, now)
+        if len(self.sides) > 1:
+            self._paint_sides(p, c, open_t)
         p.end()
 
     def _paint_guide(self, p: QPainter, c: QPointF, open_t: float) -> None:
@@ -317,6 +340,33 @@ class Wheel(QWidget):
             text = cfm.elidedText(caption, Qt.TextElideMode.ElideMiddle, width - 4)
             p.drawText(QRectF(c.x() - width / 2, top + len(lines) * line_h + 1, width, cfm.height()),
                        Qt.AlignmentFlag.AlignCenter, text)
+        p.setOpacity(1.0)
+
+    def _paint_sides(self, p: QPainter, c: QPointF, open_t: float) -> None:
+        """Under the centre: which side is showing, and that Shift turns the wheel."""
+        names = [SIDE_NAMES[name] for name, _ in self.sides]
+        font = S.font(10.5, QFont.Weight.DemiBold)
+        fm = QFontMetricsF(font)
+        gap = 14.0
+        widths = [fm.horizontalAdvance(n.upper()) + 1.2 * len(n) for n in names]
+        total = sum(widths) + gap * (len(names) - 1)
+        x = c.x() - total / 2
+        y = c.y() + CORE + 20
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.2)
+        p.setFont(font)
+        p.setOpacity(open_t)
+        for k, (name, w) in enumerate(zip(names, widths, strict=True)):
+            active = k == self.side
+            p.setPen(S.TANGERINE if active else S.with_alpha(S.TEXT, 0.42))
+            p.drawText(QRectF(x, y - 8, w, 16), Qt.AlignmentFlag.AlignCenter, name.upper())
+            if active:
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(S.TANGERINE)
+                p.drawEllipse(QPointF(x + w / 2, y + 12), 2.0, 2.0)
+            x += w + gap
+        p.setPen(S.with_alpha(S.TEXT, 0.35))
+        p.setFont(S.font(10))
+        p.drawText(QRectF(c.x() - 90, y + 16, 180, 14), Qt.AlignmentFlag.AlignCenter, "Shift  ·  Tab  ·  scroll")
         p.setOpacity(1.0)
 
     def _core_text(self) -> tuple[str, str]:

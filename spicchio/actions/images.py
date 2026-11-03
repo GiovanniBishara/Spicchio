@@ -9,6 +9,13 @@ from PIL import Image, ImageOps
 from spicchio.actions.base import Action, ActionError, each, register
 from spicchio.files import Kind, output_path
 
+try:  # iPhone photos (HEIC); optional so the core keeps working without it
+    from pillow_heif import register_heif_opener
+
+    register_heif_opener()
+except ImportError:  # pragma: no cover
+    pass
+
 IMG = frozenset({Kind.IMAGE})
 
 
@@ -100,10 +107,55 @@ def strip_metadata(path: Path) -> Path:
     return out
 
 
+def to_ico(path: Path) -> Path:
+    """A Windows icon with every common size, from a centred square crop."""
+    img = _open(path).convert("RGBA")
+    side = min(img.size)
+    left, top = (img.width - side) // 2, (img.height - side) // 2
+    square = img.crop((left, top, left + side, top + side))
+    out = output_path(path, ".ico")
+    sizes = [(s, s) for s in (16, 24, 32, 48, 64, 128, 256) if s <= max(side, 16)]
+    square.save(out, "ICO", sizes=sizes)
+    return out
+
+
+EMAIL_BYTES = 1_000_000
+
+
+def email_size(path: Path) -> Path:
+    """A JPG under 1 MB: the best quality that fits, shrinking the picture only if it must."""
+    img = _flatten(_open(path))
+    out = output_path(path, ".jpg", "email")
+
+    def encode(im: Image.Image, q: int) -> bytes:
+        import io
+
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=q, optimize=True, progressive=True)
+        return buf.getvalue()
+
+    for _ in range(12):
+        lo, hi, best = 35, 92, None
+        while lo <= hi:  # binary search on quality
+            q = (lo + hi) // 2
+            data = encode(img, q)
+            if len(data) <= EMAIL_BYTES:
+                best, lo = data, q + 1
+            else:
+                hi = q - 1
+        if best is not None:
+            out.write_bytes(best)
+            return out
+        img = img.resize((max(1, int(img.width * 0.8)), max(1, int(img.height * 0.8))), Image.Resampling.LANCZOS)
+    raise ActionError(f"Can't get {path.name} under 1 MB")
+
+
 register(Action("img.pdf", "PDF", IMG, to_pdf, mode="many", title="Convert to PDF"))
-register(Action("img.png", "PNG", IMG, each(to_png), skip_ext=frozenset({".png"}), title="Convert to PNG"))
 register(Action("img.jpg", "JPG", IMG, each(to_jpg), skip_ext=frozenset({".jpg", ".jpeg"}), title="Convert to JPG"))
+register(Action("img.png", "PNG", IMG, each(to_png), skip_ext=frozenset({".png"}), title="Convert to PNG"))
 register(Action("img.webp", "WebP", IMG, each(to_webp), skip_ext=frozenset({".webp"}), title="Convert to WebP"))
-register(Action("img.compress", "Compress", IMG, each(compress), title="Make it smaller"))
-register(Action("img.half", "Half size", IMG, each(half_size), title="Resize to 50%"))
-register(Action("img.clean", "No metadata", IMG, each(strip_metadata), title="Remove EXIF and GPS"))
+register(Action("img.ico", "ICO", IMG, each(to_ico), skip_ext=frozenset({".ico"}), title="Windows icon"))
+register(Action("img.compress", "Compress", IMG, each(compress), title="Make it smaller", side="tools"))
+register(Action("img.email", "Under 1 MB", IMG, each(email_size), title="Ready for email", side="tools"))
+register(Action("img.half", "Half size", IMG, each(half_size), title="Resize to 50%", side="tools"))
+register(Action("img.clean", "No metadata", IMG, each(strip_metadata), title="Remove EXIF and GPS", side="tools"))

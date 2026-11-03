@@ -20,7 +20,7 @@ class Kind(str, Enum):
 
 
 _EXTENSIONS: dict[Kind, set[str]] = {
-    Kind.IMAGE: {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"},
+    Kind.IMAGE: {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff", ".heic", ".heif"},
     Kind.PDF: {".pdf"},
     Kind.VIDEO: {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"},
     Kind.AUDIO: {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"},

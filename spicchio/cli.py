@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from spicchio import __version__
-from spicchio.actions import ActionError, actions_for, all_actions, get
+from spicchio.actions import SIDE_NAMES, ActionError, Done, all_actions, get, sides_for
 
 
 def _paths(raw: list[str]) -> list[Path]:
@@ -41,11 +41,13 @@ def main(argv: list[str] | None = None) -> int:
         return run_app()
     if args.cmd == "actions":
         for a in all_actions():
-            print(f"{a.id:16} {a.label:12} {', '.join(sorted(k.value for k in a.kinds))}")
+            print(f"{a.id:16} {a.label:12} {SIDE_NAMES[a.side]:8} {', '.join(sorted(k.value for k in a.kinds))}")
         return 0
     if args.cmd == "list":
-        for a in actions_for(_paths(args.files)):
-            print(f"{a.id:16} {a.label}")
+        for side, acts in sides_for(_paths(args.files)):
+            print(SIDE_NAMES[side])
+            for a in acts:
+                print(f"  {a.id:16} {a.label}")
         return 0
 
     paths = _paths(args.files)
@@ -58,7 +60,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{action.id} does not apply to these files", file=sys.stderr)
         return 2
     try:
-        for out in action(paths):
+        result = action(paths)
+        if isinstance(result, Done):
+            print(result.clipboard or result.message)
+            return 0
+        for out in result:
             print(out)
     except ActionError as exc:
         print(f"error: {exc}", file=sys.stderr)

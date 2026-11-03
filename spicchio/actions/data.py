@@ -5,10 +5,13 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import shutil
+import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
-from spicchio.actions.base import Action, ActionError, each, register
+from spicchio.actions.base import Action, ActionError, Done, each, register
 from spicchio.files import Kind, output_path
 
 ANY = frozenset(Kind)
@@ -79,7 +82,33 @@ def checksum(path: Path) -> Path:
     return out
 
 
-register(Action("data.json", "JSON", frozenset({Kind.DATA}), each(csv_to_json), skip_ext=frozenset({".json"}), title="Convert to JSON"))
-register(Action("data.csv", "CSV", frozenset({Kind.DATA}), each(json_to_csv), skip_ext=frozenset({".csv"}), title="Convert to CSV"))
-register(Action("any.zip", "ZIP", ANY, zip_files, mode="many", title="Zip it"))
-register(Action("any.sha256", "SHA-256", ANY, each(checksum), title="SHA-256 checksum"))
+def copy_path(paths: list[Path]) -> Done:
+    text = "\n".join(str(p) for p in paths)
+    what = "Path copied" if len(paths) == 1 else f"{len(paths)} paths copied"
+    return Done(what, text if len(text) < 90 else paths[0].name, clipboard=text)
+
+
+def terminal_here(paths: list[Path]) -> Done:
+    folder = paths[0] if paths[0].is_dir() else paths[0].parent
+    try:
+        if sys.platform == "win32":
+            if shutil.which("wt"):
+                subprocess.Popen(["wt", "-d", str(folder)])
+            else:
+                subprocess.Popen(["powershell", "-NoExit"], cwd=folder, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", "-a", "Terminal", str(folder)])
+        else:
+            subprocess.Popen(["x-terminal-emulator"], cwd=folder)
+    except OSError as exc:
+        raise ActionError("Can't open a terminal on this system") from exc
+    return Done("Terminal opened", str(folder))
+
+
+DATA = frozenset({Kind.DATA})
+register(Action("data.json", "JSON", DATA, each(csv_to_json), skip_ext=frozenset({".json"}), title="Convert to JSON"))
+register(Action("data.csv", "CSV", DATA, each(json_to_csv), skip_ext=frozenset({".csv"}), title="Convert to CSV"))
+register(Action("any.zip", "ZIP", ANY, zip_files, mode="many", title="Zip it", side="actions"))
+register(Action("any.path", "Copy path", ANY, copy_path, mode="many", title="Copy the full path", side="actions"))
+register(Action("any.terminal", "Terminal", ANY, terminal_here, mode="many", title="Open a terminal here", side="actions"))
+register(Action("any.sha256", "SHA-256", ANY, each(checksum), title="SHA-256 checksum", side="actions"))

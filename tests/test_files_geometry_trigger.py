@@ -74,10 +74,13 @@ class Recorder:
     def close(self):
         self.events.append(("close",))
 
+    def turn(self, step):
+        self.events.append(("turn", step))
+
 
 def make():
     r = Recorder()
-    return DragShiftDetector(on_open=r.open, on_close=r.close), r
+    return DragShiftDetector(on_open=r.open, on_close=r.close, on_turn=r.turn), r
 
 
 def test_shift_while_dragging_opens_under_cursor():
@@ -100,12 +103,32 @@ def test_shift_without_drag_does_nothing():
     assert r.events == []
 
 
+def test_shift_again_tab_and_scroll_turn_the_wheel():
+    d, r = make()
+    d.press(0, 0)
+    d.move(50, 0)
+    d.shift_down()
+    d.shift_up()
+    d.shift_down()          # a second tap turns to the next side
+    d.tab()
+    d.scroll(-1)
+    d.scroll(1)
+    assert r.events[1:] == [("turn", 1), ("turn", 1), ("turn", 1), ("turn", -1)]
+
+
+def test_tab_and_scroll_do_nothing_when_closed():
+    d, r = make()
+    d.tab()
+    d.scroll(1)
+    assert r.events == []
+
+
 def test_key_repeat_and_escape():
     d, r = make()
     d.press(0, 0)
     d.move(50, 0)
     d.shift_down()
-    d.shift_down()          # auto-repeat must not reopen
+    d.shift_down()          # auto-repeat must not reopen or turn
     assert len(r.events) == 1
     d.escape()
     assert r.events[-1] == ("close",)

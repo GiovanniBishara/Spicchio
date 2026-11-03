@@ -47,29 +47,34 @@
 
 1. **Start dragging a file** (or several) from Explorer, Finder or the desktop. Keep the mouse button down.
 2. **Tap Shift.** The wheel opens under the cursor with only the actions that make sense for those files.
-3. **Move towards an action.** You choose by direction: you can go past the circle, the pill lights up and its full name appears in the middle.
-4. **Let go.** The result is saved **next to the original**, which is never changed or overwritten (`photo.pdf`, then `photo (1).pdf`...). A notification tells you what was created: click it to see the file.
+3. **Tap Shift again** (or Tab, or scroll) to turn the wheel: **Convert → Tools → Actions**.
+4. **Move towards an action.** You choose by direction: you can go past the circle, the pill lights up and its full name appears in the middle.
+5. **Let go.** The result is saved **next to the original**, which is never changed or overwritten (`photo.pdf`, then `photo (1).pdf`...). A notification tells you what was created: click it to see the file, or press **Undo** to send it to the Recycle Bin.
 
-To cancel, drop in the middle or press **Esc**.
+To cancel, drop in the middle or press **Esc**. Long jobs (a video, say) move to a small "working" note so the wheel gets out of your way.
 
 **A few things to try**
 - Drag two or three photos together → **PDF**: one PDF with one page per photo.
 - Drag two PDFs → **Merge**.
-- Drag a phone photo → **No metadata**: the copy has no GPS position or camera details.
-- Drag a screen recording → **GIF** (needs ffmpeg, see below).
+- Drag an iPhone photo (HEIC) → **JPG**.
+- Drag a phone photo → Tools → **No metadata**: the copy has no GPS position or camera details.
+- Drag a big photo → Tools → **Under 1 MB**: the best quality that fits in an email.
+- Drag a screen recording → **GIF**, or Tools → **Under 20 MB** (needs ffmpeg, see below).
+- Drag anything → Actions → **Copy path** or **Terminal** (opens a terminal in that folder).
 
-**The tray menu** (right-click the tangerine) lets you pause Spicchio, start it with Windows, see these instructions again, or quit.
+**The tray menu** (right-click the tangerine) shows your recent results, lets you pause Spicchio, start it with Windows, see these instructions again, or quit.
 
 ## What it can do
 
-| Files | Actions |
-| --- | --- |
-| **Images** (PNG, JPG, WebP, GIF, BMP, TIFF) | PDF (several images become one PDF), PNG, JPG, WebP, Compress, Half size, Remove metadata (EXIF, GPS) |
-| **PDF** | Merge (two or more), Images (one PNG per page), Compress, Split pages, Rotate, Extract text |
-| **Video** (MP4, MOV, MKV, WebM, AVI) | MP4 (H.264), Compress, GIF, Mute, MP3 |
-| **Audio** (MP3, WAV, M4A, OGG, FLAC) | MP3, WAV |
-| **Data** | CSV → JSON (detects `;` and tabs), JSON → CSV (opens correctly in Excel) |
-| **Anything** | ZIP, SHA-256 checksum |
+| Files | Convert | Tools |
+| --- | --- | --- |
+| **Images** (PNG, JPG, HEIC, WebP, GIF, BMP, TIFF) | PDF (several images become one PDF), JPG, PNG, WebP, ICO | Compress, Under 1 MB, Half size, Remove metadata (EXIF, GPS) |
+| **PDF** | Images (one PNG per page), Text | Merge (two or more), Compress, Split pages, Rotate |
+| **Video** (MP4, MOV, MKV, WebM, AVI) | MP4 (H.264), GIF, MP3 | Compress, Under 20 MB, Snapshot, Mute |
+| **Audio** (MP3, WAV, M4A, OGG, FLAC) | MP3, M4A, WAV, FLAC | |
+| **Data** | CSV → JSON (detects `;` and tabs), JSON → CSV (opens correctly in Excel) | |
+
+**Actions**, for any file or folder: ZIP, Copy path, Terminal here, SHA-256 checksum.
 
 Video and audio actions appear only if [ffmpeg](https://ffmpeg.org) is installed: `winget install ffmpeg` on Windows, `brew install ffmpeg` on macOS. Everything runs **offline** on your computer.
 
@@ -121,7 +126,8 @@ spicchio/
 │   ├── icon.py     the mark, drawn in code
 │   ├── toast.py    the notification
 │   └── dragimage.py hides the shell's big drag preview while you're on the wheel (Windows)
-├── app.py          tray app, wiring and worker thread
+├── undo.py         Undo: outputs go to the Recycle Bin, never the originals
+├── app.py          tray app, wiring, worker thread, recent results
 └── cli.py          the same actions from the command line
 ```
 
@@ -150,6 +156,8 @@ CI runs lint and tests on Windows, macOS and Linux, builds the Windows and macOS
 - [ ] OCR for scanned PDFs
 - [ ] Background removal for images
 - [ ] Settings to choose and reorder actions
+- [ ] Watch folders (convert what lands in a folder automatically)
+- [ ] Presets (e.g. "web-optimised image") and batch rename
 - [ ] Signed builds
 
 ## Credits

@@ -1,4 +1,9 @@
-"""The action model and the registry that decides which slices to show."""
+"""The action model and the registry that decides which pills to show.
+
+Actions are grouped in *sides* of the wheel: Convert, Tools and Actions. Shift
+opens the first side that has something for the dropped files; tapping Shift
+again (or Tab, or the mouse wheel) turns to the next one.
+"""
 
 from __future__ import annotations
 
@@ -8,13 +13,26 @@ from pathlib import Path
 
 from spicchio.files import Kind, kind_of
 
+SIDES = ("convert", "tools", "actions")
+SIDE_NAMES = {"convert": "Convert", "tools": "Tools", "actions": "Actions"}
+
 
 class ActionError(Exception):
     """A user-facing error: the message is shown as is in the notification."""
 
 
-# An action receives the dropped files and returns the files it created.
-Runner = Callable[[Sequence[Path]], list[Path]]
+@dataclass
+class Done:
+    """Returned by actions that don't create files (copy a path, open a terminal...)."""
+
+    message: str
+    detail: str = ""
+    clipboard: str | None = None
+
+
+Result = list[Path] | Done
+# An action receives the dropped files and returns the files it created (or a Done).
+Runner = Callable[[Sequence[Path]], Result]
 
 
 @dataclass(frozen=True)
@@ -33,6 +51,7 @@ class Action:
     available: Callable[[], bool] = lambda: True
     # Longer description shown in the middle of the wheel ("Convert to PDF"). Defaults to the label.
     title: str = ""
+    side: str = "convert"
 
     @property
     def headline(self) -> str:
@@ -47,12 +66,15 @@ class Action:
             return False
         return True
 
-    def __call__(self, paths: Sequence[Path]) -> list[Path]:
+    def __call__(self, paths: Sequence[Path]) -> Result:
         if self.mode == "many":
             return self.run(list(paths))
         out: list[Path] = []
         for p in paths:
-            out.extend(self.run([p]))
+            result = self.run([p])
+            if isinstance(result, Done):
+                return result
+            out.extend(result)
         return out
 
 
@@ -62,6 +84,8 @@ _REGISTRY: list[Action] = []
 def register(action: Action) -> Action:
     if any(a.id == action.id for a in _REGISTRY):
         raise ValueError(f"duplicate action id: {action.id}")
+    if action.side not in SIDES:
+        raise ValueError(f"unknown side for {action.id}: {action.side}")
     _REGISTRY.append(action)
     return action
 
@@ -70,11 +94,25 @@ def all_actions() -> list[Action]:
     return list(_REGISTRY)
 
 
-def actions_for(paths: Sequence[Path], limit: int = 8) -> list[Action]:
-    """The actions that make sense for these files, in registry order, at most ``limit``."""
+def actions_for(paths: Sequence[Path], side: str | None = None, limit: int = 8) -> list[Action]:
+    """The actions that make sense for these files, in registry order.
+
+    With ``side`` only that side of the wheel, at most ``limit`` pills.
+    """
     if not paths:
         return []
-    return [a for a in _REGISTRY if a.applies_to(paths)][:limit]
+    found = [a for a in _REGISTRY if a.applies_to(paths) and (side is None or a.side == side)]
+    return found[:limit] if side else found
+
+
+def sides_for(paths: Sequence[Path], limit: int = 8) -> list[tuple[str, list[Action]]]:
+    """The non-empty sides of the wheel for these files, in order."""
+    out = []
+    for side in SIDES:
+        acts = actions_for(paths, side, limit)
+        if acts:
+            out.append((side, acts))
+    return out
 
 
 def get(action_id: str) -> Action:
