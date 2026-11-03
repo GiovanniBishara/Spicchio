@@ -7,9 +7,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QCursor, QFont, QFontMetrics, QPainter
+from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
+from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QPainter, QPen
 from PySide6.QtWidgets import QWidget
+
+from spicchio.ui import style as S
+from spicchio.ui.icon import paint_mark
+
+PAD = 12  # room for the shadow
 
 
 def reveal(path: Path) -> None:
@@ -37,29 +42,43 @@ class Toast(QWidget):
         self._body = ""
         self._error = False
         self._target: Path | None = None
-        self._timer = QTimer(self)
-        self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self.hide)
-        self._font_t = QFont("Segoe UI"); self._font_t.setPixelSize(14); self._font_t.setWeight(QFont.Weight.DemiBold)
-        self._font_b = QFont("Segoe UI"); self._font_b.setPixelSize(12)
+        self._font_t = S.font(13.5, QFont.Weight.DemiBold)
+        self._font_b = S.font(11.5)
+        self._clock = QElapsedTimer()
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.timeout.connect(self.hide)
+        self._anim = QTimer(self)
+        self._anim.setInterval(16)
+        self._anim.timeout.connect(self._step)
 
     def show_message(self, title: str, body: str = "", *, error: bool = False,
                      target: Path | None = None, ms: int = 3500) -> None:
         self._title, self._body, self._error, self._target = title, body, error, target
-        w = max(QFontMetrics(self._font_t).horizontalAdvance(title),
-                QFontMetrics(self._font_b).horizontalAdvance(body)) + 56
-        self.setFixedSize(min(max(w, 220), 460), 64 if body else 44)
+        fm_t, fm_b = QFontMetricsF(self._font_t), QFontMetricsF(self._font_b)
+        text_w = max(fm_t.horizontalAdvance(title), fm_b.horizontalAdvance(body) if body else 0)
+        w = min(max(text_w + 72, 240), 460)
+        h = 62 if body else 46
+        self.setFixedSize(round(w + 2 * PAD), h + 2 * PAD)
         pos = QCursor.pos()
         screen = self.screen().availableGeometry() if self.screen() else None
-        x, y = pos.x() + 18, pos.y() + 22
+        x, y = pos.x() + 10, pos.y() + 16
         if screen is not None:
-            x = min(x, screen.right() - self.width() - 8)
-            y = min(y, screen.bottom() - self.height() - 8)
+            x = min(x, screen.right() - self.width() - 4)
+            y = min(y, screen.bottom() - self.height() - 4)
         self.move(x, y)
+        self._clock.start()
+        self.setWindowOpacity(0.0)
         self.show()
         self.raise_()
-        self.update()
-        self._timer.start(ms)
+        self._anim.start()
+        self._hide_timer.start(ms)
+
+    def _step(self) -> None:
+        t = min(1.0, self._clock.elapsed() / 180)
+        self.setWindowOpacity(1 - (1 - t) ** 3)
+        if t >= 1:
+            self._anim.stop()
 
     def mousePressEvent(self, event) -> None:
         if self._target is not None:
@@ -69,21 +88,39 @@ class Toast(QWidget):
     def paintEvent(self, event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        r = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+        r = QRectF(self.rect()).adjusted(PAD, PAD, -PAD, -PAD)
+        rad = r.height() / 2
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(18, 17, 24, 240))
-        p.drawRoundedRect(r, 14, 14)
-        p.setBrush(QColor("#e5484d") if self._error else QColor("#ff5a1f"))
-        p.drawEllipse(r.left() + 18, r.center().y() - 5, 10, 10)
-        p.setPen(QColor(255, 255, 255))
-        p.setFont(self._font_t)
-        text_x = r.left() + 40
-        if self._body:
-            p.drawText(QRectF(text_x, r.top() + 10, r.width() - 52, 22), Qt.AlignmentFlag.AlignVCenter, self._title)
-            p.setPen(QColor(255, 255, 255, 170))
-            p.setFont(self._font_b)
-            body = QFontMetrics(self._font_b).elidedText(self._body, Qt.TextElideMode.ElideMiddle, int(r.width() - 52))
-            p.drawText(QRectF(text_x, r.top() + 32, r.width() - 52, 20), Qt.AlignmentFlag.AlignVCenter, body)
+        for grow, a in ((8, 14), (4, 30), (1, 50)):
+            p.setBrush(QColor(0, 0, 0, a))
+            p.drawRoundedRect(r.adjusted(-grow, -grow + 3, grow, grow + 3), rad + grow, rad + grow)
+        p.setBrush(QColor(22, 21, 26, 246))
+        p.setPen(QPen(S.HAIRLINE, 1.0))
+        p.drawRoundedRect(r, rad, rad)
+
+        icon_c = QPointF(r.left() + rad, r.center().y())
+        if self._error:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(S.DANGER)
+            p.drawEllipse(icon_c, 9, 9)
+            pen = QPen(S.TEXT, 2.0)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.drawLine(QPointF(icon_c.x(), icon_c.y() - 4), QPointF(icon_c.x(), icon_c.y() + 1))
+            p.drawPoint(QPointF(icon_c.x(), icon_c.y() + 4.5))
         else:
-            p.drawText(QRectF(text_x, r.top(), r.width() - 52, r.height()), Qt.AlignmentFlag.AlignVCenter, self._title)
+            paint_mark(p, icon_c, 10, lifted=True)
+
+        text_x = r.left() + 2 * rad - 4
+        text_w = r.right() - text_x - 16
+        p.setPen(S.TEXT)
+        p.setFont(self._font_t)
+        if self._body:
+            p.drawText(QRectF(text_x, r.top() + 10, text_w, 20), Qt.AlignmentFlag.AlignVCenter, self._title)
+            p.setPen(S.TEXT_SOFT)
+            p.setFont(self._font_b)
+            body = QFontMetricsF(self._font_b).elidedText(self._body, Qt.TextElideMode.ElideMiddle, text_w)
+            p.drawText(QRectF(text_x, r.top() + 31, text_w, 18), Qt.AlignmentFlag.AlignVCenter, body)
+        else:
+            p.drawText(QRectF(text_x, r.top(), text_w, r.height()), Qt.AlignmentFlag.AlignVCenter, self._title)
         p.end()

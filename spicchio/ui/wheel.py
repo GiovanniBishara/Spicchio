@@ -1,63 +1,40 @@
 """The wheel: a transparent, always-on-top window that accepts file drops.
 
-It opens under the cursor while a file is being dragged. Slices are picked by
-*direction*: the pointer can travel well past the ring, so the drag image that
-Windows draws next to the cursor never covers the labels. The name of the
-chosen action is written in the middle, where the cursor never is.
+It opens under the cursor while a file is being dragged. Actions are light
+pills arranged on a circle; they fly out from the centre once Spicchio knows
+which files are coming. A pill is chosen by *direction*: the pointer can travel
+past the circle, and the name of the chosen action is written in the middle.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEasingCurve, QPointF, QRectF, Qt, QTimer, QVariantAnimation, Signal
-from PySide6.QtGui import QColor, QCursor, QFont, QPainter, QPainterPath, QPen, QRadialGradient
+from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen, QRadialGradient
 from PySide6.QtWidgets import QWidget
 
 from spicchio.actions import Action, actions_for
-from spicchio.geometry import angle_of, label_point, point_at, slice_at, slices
+from spicchio.geometry import angle_of, point_at, slice_at, slices
+from spicchio.ui import dragimage
+from spicchio.ui import style as S
 
-OUTER = 150   # radius of the visible ring (logical px)
-INNER = 66    # radius of the hole with the action name
-REACH = 120   # how far beyond the ring a direction still selects a slice
-SHADOW = 26
-GROW = 12     # how much the chosen slice grows outwards
-GAP_DEG = 1.4
-
-INK = QColor(14, 13, 19)
-RING_IN = QColor(34, 31, 42, 246)
-RING_OUT = QColor(20, 19, 26, 246)
-ORANGE = QColor(255, 90, 31)
-ORANGE_HI = QColor(255, 128, 74)
-VIOLET = QColor(108, 60, 255)
-WHITE = QColor(255, 255, 255)
+RING = 124        # radius of the circle the pills sit on
+CORE = 50         # radius of the central disc
+DEAD = 40         # inside this radius nothing is chosen: dropping there cancels
+REACH = 112       # how far beyond the circle a direction still chooses a pill
+PILL_H = 34
+STAGGER_MS = 26
+FLY_MS = 360
 
 
-def _ui_font(px: int, weight: QFont.Weight) -> QFont:
-    f = QFont()
-    f.setFamilies(["Segoe UI Variable Display", "Segoe UI", "Inter", "Helvetica Neue", "Arial"])
-    f.setPixelSize(px)
-    f.setWeight(weight)
-    f.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
-    return f
+def _ease_out_back(t: float, s: float = 1.45) -> float:
+    t -= 1
+    return t * t * ((s + 1) * t + s) + 1
 
 
-def _sector(c: QPointF, r_in: float, r_out: float, start: float, sweep: float) -> QPainterPath:
-    """Ring sector. ``start``/``sweep`` are clockwise degrees from 12 o'clock (see geometry.py)."""
-    qt_start = 90 - start  # Qt: counter-clockwise from 3 o'clock
-    outer = QRectF(c.x() - r_out, c.y() - r_out, 2 * r_out, 2 * r_out)
-    inner = QRectF(c.x() - r_in, c.y() - r_in, 2 * r_in, 2 * r_in)
-    path = QPainterPath()
-    path.arcMoveTo(outer, qt_start)
-    path.arcTo(outer, qt_start, -sweep)
-    path.arcTo(inner, qt_start - sweep, sweep)
-    path.closeSubpath()
-    return path
-
-
-def _mix(a: QColor, b: QColor, t: float) -> QColor:
-    return QColor(round(a.red() + (b.red() - a.red()) * t), round(a.green() + (b.green() - a.green()) * t),
-                  round(a.blue() + (b.blue() - a.blue()) * t), round(a.alpha() + (b.alpha() - a.alpha()) * t))
+def _ease_out(t: float) -> float:
+    return 1 - (1 - t) ** 3
 
 
 class Wheel(QWidget):
@@ -70,7 +47,7 @@ class Wheel(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAcceptDrops(True)
-        side = 2 * (OUTER + REACH + 8)
+        side = 2 * (RING + REACH + 6)
         self.setFixedSize(side, side)
 
         self.paths: list[Path] = []
@@ -78,21 +55,24 @@ class Wheel(QWidget):
         self.hover: int | None = None
         self.pointer_angle: float | None = None
         self.busy = False
-        self._grow: list[float] = []   # per-slice highlight, animated towards 0/1
-        self._open = 1.0
 
-        self._anim = QVariantAnimation(self)
-        self._anim.setStartValue(0.0)
-        self._anim.setEndValue(1.0)
-        self._anim.setDuration(240)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._anim.valueChanged.connect(self._on_open)
+        self._clock = QElapsedTimer()
+        self._clock.start()
+        self._opened_at = -10_000.0
+        self._pills_at = -10_000.0
+        self._still = False          # renders: skip every animation
+        self._sel: list[float] = []  # per-pill selection, eased towards 0/1
+        self._last_hide = 0.0
 
         self._tick = QTimer(self)
         self._tick.setInterval(16)
         self._tick.timeout.connect(self._step)
 
-    # ---------------------------------------------------------------- show/hide
+        self._font_pill = S.font(13, QFont.Weight.DemiBold)
+        self._font_title = S.font(15, QFont.Weight.DemiBold, display=True)
+        self._font_caption = S.font(11)
+
+    # ------------------------------------------------------------------ state
     def open_at_cursor(self) -> None:
         if self.busy:
             return
@@ -100,11 +80,10 @@ class Wheel(QWidget):
         geo = self.frameGeometry()
         geo.moveCenter(QCursor.pos())
         self.move(geo.topLeft())
-        self._open = 0.0
-        self.setWindowOpacity(0.0)
+        self._opened_at = self._now()
         self.show()
         self.raise_()
-        self._anim.start()
+        self._tick.start()
 
     def close_soon(self) -> None:
         """Called when the mouse button is released. If a drop is being processed, stay open."""
@@ -117,6 +96,7 @@ class Wheel(QWidget):
 
     def hideEvent(self, event) -> None:
         self._tick.stop()
+        dragimage.restore()
         super().hideEvent(event)
 
     def set_files(self, paths: list[Path]) -> None:
@@ -124,37 +104,43 @@ class Wheel(QWidget):
         self.actions = actions_for(paths)
         self.hover = None
         self.pointer_angle = None
-        self._grow = [0.0] * len(self.actions)
+        self._sel = [0.0] * len(self.actions)
+        self._pills_at = self._now()
         self.update()
 
-    def set_hover(self, index: int | None, *, instant: bool = False) -> None:
+    def set_hover(self, index: int | None) -> None:
         self.hover = index
-        if instant:
-            self._grow = [1.0 if i == index else 0.0 for i in range(len(self.actions))]
+        if self._still:
+            self._sel = [1.0 if i == index else 0.0 for i in range(len(self.actions))]
         elif not self._tick.isActive():
             self._tick.start()
         self.update()
 
-    def _on_open(self, v: float) -> None:
-        self._open = v
-        self.setWindowOpacity(v)
+    def freeze(self) -> None:
+        """Jump to the end of every animation (used for renders and tests)."""
+        self._still = True
+        self._sel = [1.0 if i == self.hover else 0.0 for i in range(len(self.actions))]
         self.update()
+
+    def _now(self) -> float:
+        return float(self._clock.elapsed())
 
     def _step(self) -> None:
-        settled = True
-        for i, g in enumerate(self._grow):
+        moving = self.busy or self._now() - self._pills_at < FLY_MS + STAGGER_MS * len(self.actions) + 40
+        moving = moving or self._now() - self._opened_at < 260
+        for i, v in enumerate(self._sel):
             target = 1.0 if i == self.hover else 0.0
-            g += (target - g) * 0.28
-            if abs(target - g) < 0.01:
-                g = target
+            v += (target - v) * 0.24
+            if abs(target - v) < 0.004:
+                v = target
             else:
-                settled = False
-            self._grow[i] = g
+                moving = True
+            self._sel[i] = v
         self.update()
-        if settled:
+        if not moving:
             self._tick.stop()
 
-    # ---------------------------------------------------------------- drag & drop
+    # ------------------------------------------------------------- drag & drop
     @staticmethod
     def _local_paths(event) -> list[Path]:
         md = event.mimeData()
@@ -164,6 +150,8 @@ class Wheel(QWidget):
 
     def dragEnterEvent(self, event) -> None:
         self.set_files(self._local_paths(event))
+        self._tick.start()
+        dragimage.hide()
         if self.actions:
             event.setDropAction(Qt.DropAction.CopyAction)
             event.accept()
@@ -171,15 +159,17 @@ class Wheel(QWidget):
             event.ignore()
 
     def dragMoveEvent(self, event) -> None:
+        now = self._now()
+        if now - self._last_hide > 120:  # the shell may recreate its preview window
+            dragimage.hide()
+            self._last_hide = now
         p = event.position()
         c = self.rect().center()
         dx, dy = p.x() - c.x(), p.y() - c.y()
-        new = slice_at(dx, dy, len(self.actions), INNER, OUTER + REACH)
+        new = slice_at(dx, dy, len(self.actions), DEAD, RING + REACH)
         self.pointer_angle = angle_of(dx, dy) if new is not None else None
         if new != self.hover:
             self.set_hover(new)
-        else:
-            self.update()
         if new is None:
             event.ignore()  # the "no" cursor: dropping in the middle cancels
         else:
@@ -187,9 +177,11 @@ class Wheel(QWidget):
             event.accept()
 
     def dragLeaveEvent(self, event) -> None:
+        dragimage.restore()
         self.set_hover(None)
 
     def dropEvent(self, event) -> None:
+        dragimage.restore()
         if self.hover is None or not self.actions:
             event.ignore()
             return
@@ -197,7 +189,7 @@ class Wheel(QWidget):
         event.setDropAction(Qt.DropAction.CopyAction)
         event.accept()
         self.busy = True
-        self.update()
+        self._tick.start()
         self.dropped.emit(self.actions[self.hover], list(self.paths))
 
     # ---------------------------------------------------------------- painting
@@ -206,113 +198,164 @@ class Wheel(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         c = QPointF(self.rect().center())
+        now = self._now()
 
-        # Invisible, but not empty: on Windows fully transparent pixels let the drop fall through
-        # to whatever is behind (the desktop!). Alpha 1 keeps the whole reach area a drop target.
+        # Invisible but not empty: on Windows fully transparent pixels let a drop fall
+        # through to whatever is behind (the desktop). Alpha 1 keeps the reach a drop target.
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 1))
-        p.drawEllipse(c, OUTER + REACH, OUTER + REACH)
+        p.drawEllipse(c, RING + REACH, RING + REACH)
 
-        s = 0.86 + 0.14 * self._open
-        p.translate(c)
-        p.scale(s, s)
-        p.translate(-c)
-
-        self._paint_ring(p, c)
+        open_t = 1.0 if self._still else _ease_out(min(1.0, (now - self._opened_at) / 240))
+        self._paint_guide(p, c, open_t)
         if self.actions:
-            self._paint_slices(p, c)
-        self._paint_centre(p, c)
+            self._paint_pills(p, c, now)
+        self._paint_core(p, c, open_t, now)
         p.end()
 
-    def _paint_ring(self, p: QPainter, c: QPointF) -> None:
-        shadow = QRadialGradient(c, OUTER + SHADOW)
-        shadow.setColorAt((OUTER - 6) / (OUTER + SHADOW), QColor(0, 0, 0, 70))
-        shadow.setColorAt(1.0, QColor(0, 0, 0, 0))
-        p.setBrush(shadow)
-        p.drawEllipse(QPointF(c.x(), c.y() + 8), OUTER + SHADOW, OUTER + SHADOW)
-
-        body = QRadialGradient(c, OUTER)
-        body.setColorAt(INNER / OUTER, RING_IN)
-        body.setColorAt(1.0, RING_OUT)
-        p.setBrush(body)
-        p.drawEllipse(c, OUTER, OUTER)  # a full disc: no see-through gap around the centre
-
-        # hairlines: light from above on the outer edge, a darker lip on the inner one
+    def _paint_guide(self, p: QPainter, c: QPointF, open_t: float) -> None:
+        """The thin circle the pills hang on, and the arc that points at the chosen one."""
+        r = RING * (0.6 + 0.4 * open_t)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(QColor(255, 255, 255, 34), 1.0))
-        p.drawEllipse(c, OUTER - 0.5, OUTER - 0.5)
-        p.setPen(QPen(QColor(255, 255, 255, 18), 1.0))
-        p.drawEllipse(c, INNER + 0.5, INNER + 0.5)
+        p.setPen(QPen(S.with_alpha(S.HAIRLINE, open_t), 1.0))
+        p.drawEllipse(c, r, r)
+        if self.hover is None or not self.actions:
+            return
+        s = slices(len(self.actions))[self.hover]
+        g = self._sel[self.hover] if self.hover < len(self._sel) else 1.0
+        sweep = (s.sweep - 10) * g
+        pen = QPen(S.with_alpha(S.TANGERINE, 0.9 * g), 2.2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+        rect = QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r)
+        start_qt = 90 - (s.middle - sweep / 2)
+        p.drawArc(rect, round(start_qt * 16), round(-sweep * 16))
 
-    def _paint_slices(self, p: QPainter, c: QPointF) -> None:
-        n = len(self.actions)
-        parts = slices(n)
-        # separators between slices
-        p.setPen(QPen(QColor(255, 255, 255, 16), 1.0))
-        for s in parts:
-            a, b = point_at(s.start, INNER + 6), point_at(s.start, OUTER - 6)
-            p.drawLine(QPointF(c.x() + a[0], c.y() + a[1]), QPointF(c.x() + b[0], c.y() + b[1]))
+    def _pill_progress(self, i: int, now: float) -> float:
+        if self._still:
+            return 1.0
+        return max(0.0, min(1.0, (now - self._pills_at - i * STAGGER_MS) / FLY_MS))
 
-        label_font = _ui_font(14 if n <= 6 else 13, QFont.Weight.DemiBold)
-        for s in parts:
-            g = self._grow[s.index] if s.index < len(self._grow) else 0.0
-            if g > 0.001:
-                r_out = OUTER + GROW * g
-                fill = QRadialGradient(c, r_out)
-                fill.setColorAt(INNER / r_out, _mix(QColor(255, 90, 31, 0), ORANGE, g))
-                fill.setColorAt(1.0, _mix(QColor(255, 128, 74, 0), ORANGE_HI, g))
-                p.fillPath(_sector(c, INNER + 3, r_out, s.start + GAP_DEG / 2, s.sweep - GAP_DEG), fill)
-            dx, dy = label_point(s, (INNER + OUTER) / 2 + 4 + GROW * 0.4 * g)
-            box = QRectF(c.x() + dx - 56, c.y() + dy - 13, 112, 26)
-            p.setFont(label_font)
-            p.setPen(_mix(QColor(255, 255, 255, 225), INK, g))
-            p.drawText(box, Qt.AlignmentFlag.AlignCenter, self.actions[s.index].label)
+    def _paint_pills(self, p: QPainter, c: QPointF, now: float) -> None:
+        fm = QFontMetricsF(self._font_pill)
+        anyone = self.hover is not None
+        for s in slices(len(self.actions)):
+            i = s.index
+            t = self._pill_progress(i, now)
+            if t <= 0:
+                continue
+            g = self._sel[i] if i < len(self._sel) else 0.0
+            radius = RING * (0.25 + 0.75 * _ease_out_back(t)) + 6 * g
+            dx, dy = point_at(s.middle, radius)
+            centre = QPointF(c.x() + dx, c.y() + dy)
+            label = self.actions[i].label
+            w = max(64.0, fm.horizontalAdvance(label) + 30)
+            scale = (0.82 + 0.18 * _ease_out(t)) * (1 + 0.07 * g)
+            alpha = _ease_out(t) * (1.0 if not anyone or i == self.hover else 0.58 + 0.42 * g)
 
-        # a small notch on the rim that follows the pointer direction
-        if self.pointer_angle is not None:
-            dx, dy = point_at(self.pointer_angle, OUTER + GROW + 9)
+            p.save()
+            p.translate(centre)
+            p.scale(scale, scale)
+            p.setOpacity(alpha)
+            rect = QRectF(-w / 2, -PILL_H / 2, w, PILL_H)
+            rad = PILL_H / 2
+
+            # soft shadow, then a warm glow when chosen
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(WHITE)
-            p.drawEllipse(QPointF(c.x() + dx, c.y() + dy), 3.2, 3.2)
+            for grow, a in ((6, 18), (3, 34), (1, 50)):
+                p.setBrush(QColor(0, 0, 0, a))
+                p.drawRoundedRect(rect.adjusted(-grow, -grow + 3, grow, grow + 3), rad + grow, rad + grow)
+            if g > 0.01:
+                glow = QRadialGradient(QPointF(0, 4), w * 0.75)
+                glow.setColorAt(0.0, S.with_alpha(S.TANGERINE, 0.38 * g))
+                glow.setColorAt(1.0, S.with_alpha(S.TANGERINE, 0.0))
+                p.setBrush(glow)
+                p.drawEllipse(QPointF(0, 4), w * 0.75, w * 0.42)
 
-    def _paint_centre(self, p: QPainter, c: QPointF) -> None:
-        r = INNER - 9
-        p.setPen(QPen(QColor(255, 255, 255, 20), 1.0))
-        hole = QRadialGradient(QPointF(c.x(), c.y() - r * 0.6), r * 1.6)
-        hole.setColorAt(0.0, QColor(36, 33, 45))
-        hole.setColorAt(1.0, INK)
-        p.setBrush(hole)
+            # body: resting surface fading into a tangerine gradient
+            body = QLinearGradient(0, -PILL_H / 2, 0, PILL_H / 2)
+            body.setColorAt(0.0, S.mix(S.SURFACE, S.TANGERINE_HI, g))
+            body.setColorAt(1.0, S.mix(S.SURFACE, S.TANGERINE_LO, g))
+            p.setBrush(body)
+            p.setPen(QPen(S.mix(S.HAIRLINE, QColor(255, 210, 180, 90), g), 1.0))
+            p.drawRoundedRect(rect, rad, rad)
+            # a whisper of light on the top edge
+            p.setPen(QPen(QColor(255, 255, 255, round(14 + 40 * g)), 1.0))
+            p.drawLine(QPointF(-w / 2 + rad, -PILL_H / 2 + 1.5), QPointF(w / 2 - rad, -PILL_H / 2 + 1.5))
+
+            p.setFont(self._font_pill)
+            p.setPen(S.mix(S.TEXT, S.ON_ACCENT, g))
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
+            p.restore()
+
+    def _paint_core(self, p: QPainter, c: QPointF, open_t: float, now: float) -> None:
+        r = CORE * (0.7 + 0.3 * _ease_out_back(open_t, 1.2)) if not self._still else CORE
+        p.setOpacity(open_t)
+        p.setPen(Qt.PenStyle.NoPen)
+        for grow, a in ((10, 16), (5, 30), (2, 46)):
+            p.setBrush(QColor(0, 0, 0, a))
+            p.drawEllipse(QPointF(c.x(), c.y() + 3), r + grow, r + grow)
+        disc = QRadialGradient(QPointF(c.x(), c.y() - r * 0.8), r * 2.0)
+        disc.setColorAt(0.0, QColor(44, 41, 50, 250))
+        disc.setColorAt(1.0, QColor(16, 15, 19, 250))
+        p.setBrush(disc)
+        p.setPen(QPen(S.HAIRLINE, 1.0))
         p.drawEllipse(c, r, r)
 
-        # the two dots of the brand, top of the hole
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(VIOLET)
-        p.drawEllipse(QPointF(c.x() - 6, c.y() - r + 15), 3.6, 3.6)
-        p.setBrush(ORANGE)
-        p.drawEllipse(QPointF(c.x() + 6, c.y() - r + 15), 3.6, 3.6)
+        if self.busy:  # a tangerine arc running around the disc
+            pen = QPen(S.TANGERINE, 2.4)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            rr = r + 6
+            spin = (now / 3.2) % 360
+            p.drawArc(QRectF(c.x() - rr, c.y() - rr, 2 * rr, 2 * rr), round(-spin * 16), 100 * 16)
 
+        title, caption = self._core_text()
+        width = 2 * r - 14
+        p.setPen(S.TEXT)
+        p.setFont(self._font_title)
+        fm = QFontMetricsF(self._font_title)
+        lines = self._wrap(title, fm, width)[:2]
+        line_h = fm.height() * 0.92
+        top = c.y() - (len(lines) * line_h) / 2 - (5 if caption else 0)
+        for k, line in enumerate(lines):
+            p.drawText(QRectF(c.x() - width / 2, top + k * line_h, width, line_h), Qt.AlignmentFlag.AlignCenter, line)
+        if caption:
+            p.setFont(self._font_caption)
+            p.setPen(S.TEXT_SOFT)
+            cfm = QFontMetricsF(self._font_caption)
+            text = cfm.elidedText(caption, Qt.TextElideMode.ElideMiddle, width - 4)
+            p.drawText(QRectF(c.x() - width / 2, top + len(lines) * line_h + 1, width, cfm.height()),
+                       Qt.AlignmentFlag.AlignCenter, text)
+        p.setOpacity(1.0)
+
+    def _core_text(self) -> tuple[str, str]:
         if self.busy:
-            title, sub = "Working…", ""
-        elif self.hover is not None and self.hover < len(self.actions):
-            title, sub = self.actions[self.hover].headline, self._files_line()
-        elif self.paths and not self.actions:
-            title, sub = "Nothing to do", "with these files"
-        elif self.paths:
-            title, sub = "Pick a slice", self._files_line()
-        else:
-            title, sub = "Drop on", "a slice"
+            return "Working", self._files_line()
+        if self.hover is not None and self.hover < len(self.actions):
+            return self.actions[self.hover].headline, self._files_line()
+        if self.paths and not self.actions:
+            return "Nothing to do", "with these files"
+        if self.paths:
+            return "Choose", self._files_line()
+        return "Drop here", ""
 
-        p.setPen(WHITE)
-        p.setFont(_ui_font(14, QFont.Weight.DemiBold))
-        flags = (Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom).value | Qt.TextFlag.TextWordWrap.value
-        p.drawText(QRectF(c.x() - r + 8, c.y() - 22, 2 * r - 16, 36), flags, title)
-        p.setPen(QColor(255, 255, 255, 140))
-        small = _ui_font(11, QFont.Weight.Normal)
-        p.setFont(small)
-        p.drawText(QRectF(c.x() - r + 10, c.y() + 16, 2 * r - 20, 16), Qt.AlignmentFlag.AlignHCenter,
-                   p.fontMetrics().elidedText(sub, Qt.TextElideMode.ElideMiddle, int(2 * r - 20)))
+    @staticmethod
+    def _wrap(text: str, fm: QFontMetricsF, width: float) -> list[str]:
+        words, lines, line = text.split(), [], ""
+        for w in words:
+            trial = f"{line} {w}".strip()
+            if fm.horizontalAdvance(trial) <= width or not line:
+                line = trial
+            else:
+                lines.append(line)
+                line = w
+        if line:
+            lines.append(line)
+        return lines
 
     def _files_line(self) -> str:
         if len(self.paths) == 1:
             return self.paths[0].name
         return f"{len(self.paths)} files"
+

@@ -9,7 +9,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from spicchio.ui.wheel import INNER, OUTER, Wheel  # noqa: E402
+from spicchio.geometry import point_at, slices  # noqa: E402
+from spicchio.ui.wheel import DEAD, REACH, RING, Wheel  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -17,26 +18,30 @@ def qapp():
     return QApplication.instance() or QApplication([])
 
 
-def test_wheel_paints_slices_and_highlight(qapp, photo):
+def render(w):
+    w.freeze()
+    return w.grab().toImage()
+
+
+def test_chosen_pill_is_tangerine_and_outside_is_transparent(qapp, photo):
     w = Wheel()
     w.set_files([photo])
-    w.set_hover(0, instant=True)
-    w._open = 1.0
-    img = w.grab().toImage()
+    w.set_hover(0)
+    img = render(w)
     c = w.rect().center()
-    r = (INNER + OUTER) // 2
-    top = img.pixelColor(c.x() + 22, c.y() - r)      # slice 0, chosen: orange
-    side = img.pixelColor(c.x() + r, c.y() + 30)      # another slice: dark glass
-    corner = img.pixelColor(2, 2)                     # outside the reach: transparent
-    assert top.red() > 200 and top.green() < 150
-    assert side.alpha() > 200 and side.red() < 70
-    assert corner.alpha() == 0
+    s = slices(len(w.actions))
+    x, y = point_at(s[0].middle, RING + 6)
+    pill = img.pixelColor(round(c.x() + x), round(c.y() + y + 9))     # lower half of the chosen pill
+    rest_x, rest_y = point_at(s[2].middle, RING)
+    rest = img.pixelColor(round(c.x() + rest_x), round(c.y() + rest_y + 9))
+    assert pill.red() > 200 and 60 < pill.green() < 150 and pill.blue() < 90
+    assert rest.alpha() > 150 and rest.red() < 90
+    assert img.pixelColor(2, 2).alpha() == 0
 
 
-def test_direction_beyond_the_ring_still_selects(qapp, photo):
+def test_direction_beyond_the_circle_still_chooses(qapp):
     from spicchio.geometry import slice_at
-    from spicchio.ui.wheel import REACH
 
-    n = 4
-    assert slice_at(0, -(OUTER + REACH - 5), n, INNER, OUTER + REACH) == 0
-    assert slice_at(OUTER + 60, 0, n, INNER, OUTER + REACH) == 1
+    assert slice_at(0, -(RING + REACH - 5), 4, DEAD, RING + REACH) == 0
+    assert slice_at(RING + 60, 0, 4, DEAD, RING + REACH) == 1
+    assert slice_at(10, 10, 4, DEAD, RING + REACH) is None

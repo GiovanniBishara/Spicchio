@@ -7,13 +7,14 @@ import sys
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QPointF, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from spicchio import __version__, autostart
 from spicchio.actions import Action, ActionError
 from spicchio.trigger import DragShiftDetector, GlobalListener
+from spicchio.ui.icon import app_icon
 from spicchio.ui.toast import Toast
 from spicchio.ui.wheel import Wheel
 
@@ -24,22 +25,6 @@ class Bridge(QObject):
     open_wheel = Signal()
     close_wheel = Signal()
     finished = Signal(object, object, object)  # (Action, list[Path] | None, error str | None)
-
-
-def tray_icon() -> QIcon:
-    pm = QPixmap(64, 64)
-    pm.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QColor(18, 17, 24))
-    p.drawRoundedRect(2, 2, 60, 60, 16, 16)
-    p.setBrush(QColor("#6c3cff"))
-    p.drawEllipse(QPointF(32, 21), 9, 9)
-    p.setBrush(QColor("#ff5a1f"))
-    p.drawEllipse(QPointF(32, 43), 9, 9)
-    p.end()
-    return QIcon(pm)
 
 
 def _summary(outputs: list[Path]) -> tuple[str, str, Path | None]:
@@ -66,7 +51,7 @@ class SpicchioApp:
         self.bridge.finished.connect(self._on_finished)
         self.wheel.dropped.connect(self._run)
 
-        self.tray = QSystemTrayIcon(tray_icon(), app)
+        self.tray = QSystemTrayIcon(app_icon(64), app)
         self.tray.setToolTip("Spicchio: drag a file, press Shift, drop it on a slice")
         self.tray.setContextMenu(self._menu())
         self.tray.show()
