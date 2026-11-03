@@ -64,6 +64,7 @@ class Wheel(QWidget):
         self._opened_at = -10_000.0
         self._pills_at = -10_000.0
         self._still = False          # renders: skip every animation
+        self.time_override: float | None = None
         self._sel: list[float] = []  # per-pill selection, eased towards 0/1
         self._last_hide = 0.0
 
@@ -143,6 +144,8 @@ class Wheel(QWidget):
         self.update()
 
     def _now(self) -> float:
+        if self.time_override is not None:  # demo videos drive the animation frame by frame
+            return self.time_override
         return float(self._clock.elapsed())
 
     def _step(self) -> None:

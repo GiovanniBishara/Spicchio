@@ -23,6 +23,15 @@ jobs:
           python-version: "3.13"
       - run: pip install -e .
       - run: python scripts/render_wheel.py renders
+      - name: Demo video and GIF
+        shell: bash
+        run: |
+          pip install imageio-ffmpeg
+          python scripts/render_demo.py demo
+          FF=$(python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())")
+          "$FF" -y -loglevel error -framerate 30 -i demo/frames/%04d.png -c:v libx264 -crf 18 -preset slow -pix_fmt yuv420p -movflags +faststart renders/demo.mp4
+          "$FF" -y -loglevel error -framerate 30 -i demo/frames/%04d.png -vf "fps=20,scale=880:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=192:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a" renders/demo.gif
+          for f in 0030 0060 0075 0100 0115 0140; do cp demo/frames/$f.png renders/demo-frame-$f.png; done
       - name: Publish on the renders branch
         shell: bash
         run: |
