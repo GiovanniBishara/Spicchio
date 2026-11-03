@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -128,8 +129,6 @@ def email_size(path: Path) -> Path:
     out = output_path(path, ".jpg", "email")
 
     def encode(im: Image.Image, q: int) -> bytes:
-        import io
-
         buf = io.BytesIO()
         im.save(buf, "JPEG", quality=q, optimize=True, progressive=True)
         return buf.getvalue()

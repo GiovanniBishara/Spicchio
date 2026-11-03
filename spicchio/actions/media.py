@@ -26,16 +26,21 @@ def has_ffmpeg() -> bool:
     return ffmpeg() is not None
 
 
-def _run(args: list[str], source: Path) -> None:
+# No console window flashing on Windows while ffmpeg runs.
+_NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
+
+def _exe() -> str:
     exe = ffmpeg()
     if exe is None:
         raise ActionError("ffmpeg is not installed")
-    flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0  # no console flashing on Windows
+    return exe
+
+
+def _run(args: list[str], source: Path, before_input: tuple[str, ...] = ()) -> None:
     proc = subprocess.run(
-        [exe, "-hide_banner", "-loglevel", "error", "-y", "-i", str(source), *args],
-        capture_output=True,
-        text=True,
-        creationflags=flags,
+        [_exe(), "-hide_banner", "-loglevel", "error", "-y", *before_input, "-i", str(source), *args],
+        capture_output=True, text=True, creationflags=_NO_WINDOW, check=False,
     )
     if proc.returncode != 0:
         last = (proc.stderr.strip().splitlines() or ["unknown error"])[-1]
@@ -85,11 +90,8 @@ def to_wav(path: Path) -> Path:
 
 def duration(path: Path) -> float:
     """Length in seconds, read from ffmpeg's own report (no ffprobe needed)."""
-    exe = ffmpeg()
-    if exe is None:
-        raise ActionError("ffmpeg is not installed")
-    flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-    proc = subprocess.run([exe, "-hide_banner", "-i", str(path)], capture_output=True, text=True, creationflags=flags)
+    proc = subprocess.run([_exe(), "-hide_banner", "-i", str(path)],
+                          capture_output=True, text=True, creationflags=_NO_WINDOW, check=False)
     m = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", proc.stderr)
     if not m:
         raise ActionError(f"Can't read the length of {path.name}")
@@ -117,14 +119,8 @@ def email_video(path: Path) -> Path:
 
 def snapshot(path: Path) -> Path:
     """A PNG of the frame in the middle of the video."""
-    middle = duration(path) / 2
     out = output_path(path, ".png", "frame")
-    exe = ffmpeg()
-    flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-    proc = subprocess.run([exe, "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{middle:.2f}", "-i", str(path),
-                           "-frames:v", "1", str(out)], capture_output=True, text=True, creationflags=flags)
-    if proc.returncode != 0 or not out.exists():
-        raise ActionError(f"Can't take a frame from {path.name}")
+    _run(["-frames:v", "1", str(out)], path, before_input=("-ss", f"{duration(path) / 2:.2f}"))
     return out
 
 

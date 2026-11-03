@@ -42,9 +42,8 @@ class DragShiftDetector:
 
     def move(self, x: int, y: int) -> None:
         self._pos = (x, y)
-        if self._down_at and not self._dragging:
-            if math.dist(self._down_at, (x, y)) >= self.threshold:
-                self._dragging = True
+        if self._down_at and not self._dragging and math.dist(self._down_at, (x, y)) >= self.threshold:
+            self._dragging = True
 
     def release(self) -> None:
         self._down_at = None

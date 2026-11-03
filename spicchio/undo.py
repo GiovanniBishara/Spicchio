@@ -26,8 +26,8 @@ def undo(outputs: Sequence[Path], sources: Sequence[Path], trash: Callable[[Path
     keep_dirs = {s.resolve().parent for s in sources}
     moved = 0
     folders: set[Path] = set()
-    for out in outputs:
-        out = out.resolve()
+    for raw in outputs:
+        out = raw.resolve()
         if out in keep or not out.exists():
             continue
         trash(out)

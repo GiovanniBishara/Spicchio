@@ -15,7 +15,7 @@ from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QLinearGradient
 from PySide6.QtWidgets import QWidget
 
 from spicchio.actions import SIDE_NAMES, Action, sides_for
-from spicchio.geometry import angle_of, point_at, slice_at, slices
+from spicchio.geometry import point_at, slice_at, slices
 from spicchio.ui import dragimage
 from spicchio.ui import style as S
 
@@ -56,7 +56,6 @@ class Wheel(QWidget):
         self.actions: list[Action] = []
         self._last_vec: tuple[float, float] | None = None
         self.hover: int | None = None
-        self.pointer_angle: float | None = None
         self.busy = False
 
         self._clock = QElapsedTimer()
@@ -123,7 +122,6 @@ class Wheel(QWidget):
         self._sel = [0.0] * len(self.actions)
         self._pills_at = self._now()
         self.hover = None
-        self.pointer_angle = None
         if self._last_vec is not None:  # the pointer may not move again before the drop
             dx, dy = self._last_vec
             self.hover = slice_at(dx, dy, len(self.actions), DEAD, RING + REACH)
@@ -153,12 +151,12 @@ class Wheel(QWidget):
         moving = moving or self._now() - self._opened_at < 260
         for i, v in enumerate(self._sel):
             target = 1.0 if i == self.hover else 0.0
-            v += (target - v) * 0.24
-            if abs(target - v) < 0.004:
-                v = target
+            eased = v + (target - v) * 0.24
+            if abs(target - eased) < 0.004:
+                eased = target
             else:
                 moving = True
-            self._sel[i] = v
+            self._sel[i] = eased
         self.update()
         if not moving:
             self._tick.stop()
@@ -191,7 +189,6 @@ class Wheel(QWidget):
         dx, dy = p.x() - c.x(), p.y() - c.y()
         self._last_vec = (dx, dy)
         new = slice_at(dx, dy, len(self.actions), DEAD, RING + REACH)
-        self.pointer_angle = angle_of(dx, dy) if new is not None else None
         if new != self.hover:
             self.set_hover(new)
         if new is None:

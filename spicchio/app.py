@@ -67,7 +67,7 @@ class SpicchioApp:
         self.tray.setContextMenu(self.menu)
         self.tray.show()
         self._enabled = True
-        self._busy_job = 0
+        self._job = 0
 
     # ---------------------------------------------------------------- tray menu
     def _fill_menu(self) -> None:
@@ -115,14 +115,14 @@ class SpicchioApp:
 
     # ---------------------------------------------------------------- actions
     def _run(self, action: Action, paths: list[Path]) -> None:
-        self._busy_job += 1
-        job = self._busy_job
+        self._job += 1
+        job = self._job
         name = paths[0].name if len(paths) == 1 else f"{len(paths)} files"
 
         def slow() -> None:
             # Still running: put the wheel away and keep a small "working" note instead,
             # so a long video conversion never sits in the middle of the screen.
-            if self._busy_job == job:
+            if self._job == job:
                 self.wheel.done()
                 self.toast.show_message(f"{action.headline}…", name, busy=True, ms=600_000)
 
@@ -139,7 +139,7 @@ class SpicchioApp:
         threading.Thread(target=work, daemon=True).start()
 
     def _on_finished(self, action: Action, sources: list[Path], result, error: str | None) -> None:
-        self._busy_job += 1  # cancels a pending "Working…" note
+        self._job += 1  # a new id: a pending "Working…" note for the old one won't show
         self.wheel.done()
         if error:
             self.toast.show_message(f"{action.label} failed", error, error=True, ms=6000)

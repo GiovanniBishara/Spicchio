@@ -27,7 +27,7 @@ def test_merge_needs_two_pdfs(pdf3: Path, tmp_path: Path):
     assert "pdf.merge" not in ids([pdf3])
     other = tmp_path / "other.pdf"
     other.write_bytes(pdf3.read_bytes())
-    assert [a.id for a in actions_for([pdf3, other], "tools")][0] == "pdf.merge"
+    assert actions_for([pdf3, other], "tools")[0].id == "pdf.merge"
 
 
 def test_mixed_files_only_get_generic_actions(photo: Path, pdf3: Path):

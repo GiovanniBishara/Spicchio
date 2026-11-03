@@ -39,7 +39,7 @@ def on_backgrounds(shot: QImage, out: Path, name: str) -> None:
 
 
 def main(out: Path) -> None:
-    app = QApplication.instance() or QApplication([])  # noqa: F841
+    _app = QApplication.instance() or QApplication([])
     out.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp())
     photo = tmp / "holiday-photo.png"

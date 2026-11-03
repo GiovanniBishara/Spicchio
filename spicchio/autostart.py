@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 
@@ -43,7 +44,5 @@ def set_enabled(on: bool) -> None:
         if on:
             winreg.SetValueEx(k, NAME, 0, winreg.REG_SZ, command())
         else:
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 winreg.DeleteValue(k, NAME)
-            except FileNotFoundError:
-                pass

@@ -141,9 +141,8 @@ def caption(p: QPainter, n: int, text: str, alpha: float) -> None:
     p.setOpacity(alpha)
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(QColor(22, 21, 26, 235))
-    fm_text = text
     p.setFont(font(17, QFont.Weight.DemiBold, True))
-    w = p.fontMetrics().horizontalAdvance(fm_text) + 86
+    w = p.fontMetrics().horizontalAdvance(text) + 86
     r = QRectF((W - w) / 2, 46, w, 48)
     p.drawRoundedRect(r, 24, 24)
     p.setBrush(S.TANGERINE)
@@ -158,7 +157,7 @@ def caption(p: QPainter, n: int, text: str, alpha: float) -> None:
 
 
 def main(out: Path) -> None:
-    app = QApplication.instance() or QApplication([])  # noqa: F841
+    _app = QApplication.instance() or QApplication([])
     frames = out / "frames"
     frames.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp())
@@ -203,7 +202,8 @@ def main(out: Path) -> None:
         dragging = 0.75 <= t < 4.1
 
         shown = files + ([result_row] if t > 4.35 else [])
-        folder(p, shown, highlight=4 if 4.35 < t < 6.4 else (0 if 0.6 < t < 4.1 else None), dragging=0 if dragging else None)
+        highlight = 4 if t > 4.35 else (0 if 0.6 < t < 4.1 else None)
+        folder(p, shown, highlight=highlight, dragging=0 if dragging else None)
 
         # the wheel
         if t >= 1.55 and not opened:
@@ -248,7 +248,7 @@ def main(out: Path) -> None:
             toast.render(p, QPoint(round(DESK.x() - 150), round(DESK.y() - 40)))
             p.setOpacity(1.0)
 
-        cursor(p, pos if not (4.35 < t) else pos, pressed)
+        cursor(p, pos, pressed)
 
         shift = 0.0
         for when in (1.45, 2.9):

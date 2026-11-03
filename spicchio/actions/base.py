@@ -62,9 +62,8 @@ class Action:
             return False
         if not all(kind_of(p) in self.kinds for p in paths):
             return False
-        if self.skip_ext and all(p.suffix.lower() in self.skip_ext for p in paths):
-            return False
-        return True
+        # no "PNG" pill when every file is already a PNG
+        return not (self.skip_ext and all(p.suffix.lower() in self.skip_ext for p in paths))
 
     def __call__(self, paths: Sequence[Path]) -> Result:
         if self.mode == "many":
