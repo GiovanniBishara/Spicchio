@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spicchio"
+version = "0.1.0"
+description = "Drag a file, press Shift, drop it on a slice: convert, compress and transform files from a radial menu."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Giovanni Bishara" }]
+requires-python = ">=3.10"
+keywords = ["file converter", "radial menu", "pie menu", "drag and drop", "pdf", "windows"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: Microsoft :: Windows",
+  "Environment :: Win32 (MS Windows)",
+  "Topic :: Utilities",
+]
+dependencies = [
+  "Pillow>=10.0",
+  "pypdf>=4.0",
+  "pypdfium2>=4.20",
+  "PySide6>=6.6",
+  "pynput>=1.7.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "reportlab>=4", "ruff>=0.5", "pyinstaller>=6"]
+
+[project.scripts]
+spicchio = "spicchio.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/GiovanniBishara/Spicchio"
+
+[tool.setuptools.packages.find]
+include = ["spicchio*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "UP"]
+ignore = ["E702"]
