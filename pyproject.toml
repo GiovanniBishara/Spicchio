@@ -21,7 +21,7 @@ dependencies = [
   "Pillow>=10.0",
   "pypdf>=4.0",
   "pypdfium2>=4.20",
-  "PySide6>=6.6",
+  "PySide6-Essentials>=6.6",  # QtCore, QtGui, QtWidgets only: ~85 MB instead of ~260 MB
   "pynput>=1.7.6",
 ]
 
