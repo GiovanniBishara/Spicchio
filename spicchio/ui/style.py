@@ -9,7 +9,7 @@ from __future__ import annotations
 from PySide6.QtGui import QColor, QFont
 
 INK = QColor(16, 15, 19)            # the base of every surface
-SURFACE = QColor(28, 27, 33, 238)   # a pill at rest
+SURFACE = QColor(28, 27, 33, 238)   # a surface at rest
 HAIRLINE = QColor(255, 255, 255, 22)
 TEXT = QColor(246, 242, 236)        # warm white
 TEXT_SOFT = QColor(246, 242, 236, 140)

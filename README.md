@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/wheel-render.png" width="460" alt="The Spicchio wheel: an image is being dropped on the PDF pill, and 'Convert to PDF' is written in the middle">
+  <img src="docs/wheel-render.png" width="460" alt="The Spicchio wheel: an image is being dropped on the PDF slice, and 'Convert to PDF' is written in the middle">
 </p>
 
 *Spicchio* is Italian for a slice of a tangerine.
@@ -48,7 +48,7 @@
 1. **Start dragging a file** (or several) from Explorer, Finder or the desktop. Keep the mouse button down.
 2. **Tap Shift.** The wheel opens under the cursor with only the actions that make sense for those files.
 3. **Tap Shift again** (or Tab, or scroll) to turn the wheel: **Convert → Tools → Actions**.
-4. **Move towards an action.** You choose by direction: you can go past the circle, the pill lights up and its full name appears in the middle.
+4. **Move towards an action.** You choose by direction: you can go past the circle, the slice lifts out in tangerine and its full name appears in the middle.
 5. **Let go.** The result is saved **next to the original**, which is never changed or overwritten (`photo.pdf`, then `photo (1).pdf`...). A notification tells you what was created: click it to see the file, or press **Undo** to send it to the Recycle Bin.
 
 To cancel, drop in the middle or press **Esc**. Long jobs (a video, say) move to a small "working" note so the wheel gets out of your way.

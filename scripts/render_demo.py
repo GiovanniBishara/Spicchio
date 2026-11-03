@@ -174,8 +174,8 @@ def main(out: Path) -> None:
     toast = Toast()
     total = int(6.4 * FPS)
     start, grab = QPointF(250, 450), ROW0 + QPointF(10, 6)
-    jpg_dir = QPointF(DESK.x() + 120, DESK.y() - 92)   # towards "JPG" (2nd pill on Convert)
-    tools_dir = QPointF(DESK.x() + 168, DESK.y() + 6)   # towards "Under 1 MB" (2nd pill on Tools)
+    jpg_dir = QPointF(DESK.x() + 120, DESK.y() - 92)   # towards "JPG" (2nd slice on Convert)
+    tools_dir = QPointF(DESK.x() + 168, DESK.y() + 6)   # towards "Under 1 MB" (2nd slice on Tools)
 
     opened = turned = dropped = False
     for f in range(total):

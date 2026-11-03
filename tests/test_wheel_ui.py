@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from spicchio.geometry import point_at, slices  # noqa: E402
-from spicchio.ui.wheel import DEAD, REACH, RING, Wheel  # noqa: E402
+from spicchio.ui.wheel import DEAD, INNER, LIFT, REACH, RING, Wheel, segment_path  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -23,20 +23,35 @@ def render(w):
     return w.grab().toImage()
 
 
-def test_chosen_pill_is_tangerine_and_outside_is_transparent(qapp, photo):
+def test_chosen_slice_is_tangerine_and_outside_is_transparent(qapp, photo):
     w = Wheel()
     w.set_files([photo])
     w.set_hover(0)
     img = render(w)
     c = w.rect().center()
     s = slices(len(w.actions))
-    x, y = point_at(s[0].middle, RING + 6)
-    pill = img.pixelColor(round(c.x() + x), round(c.y() + y + 9))     # lower half of the chosen pill
-    rest_x, rest_y = point_at(s[2].middle, RING)
-    rest = img.pixelColor(round(c.x() + rest_x), round(c.y() + rest_y + 9))
-    assert pill.red() > 200 and 60 < pill.green() < 150 and pill.blue() < 90
+    x, y = point_at(s[0].middle, INNER + 18 + LIFT)  # inner part of the chosen slice, away from the label
+    chosen = img.pixelColor(round(c.x() + x), round(c.y() + y))
+    rest_x, rest_y = point_at(s[2].middle, INNER + 18)
+    rest = img.pixelColor(round(c.x() + rest_x), round(c.y() + rest_y))
+    assert chosen.red() > 200 and 60 < chosen.green() < 150 and chosen.blue() < 90
     assert rest.alpha() > 150 and rest.red() < 90
     assert img.pixelColor(2, 2).alpha() == 0
+
+
+def test_slices_are_cut_apart_like_a_fruit(qapp):
+    from PySide6.QtCore import QPointF
+
+    for n in (2, 4, 5, 8):
+        for i in range(n):
+            here = segment_path(n, i)
+            x, y = point_at(slices(n)[i].middle, (INNER + RING) / 2)
+            assert here.contains(QPointF(x, y))
+            assert not here.contains(QPointF(0, 0))  # the core stays free
+            nxt = segment_path(n, (i + 1) % n)
+            assert here.intersected(nxt).isEmpty()  # a visible cut between neighbours
+            bx, by = point_at(slices(n)[i].start, (INNER + RING) / 2)  # exactly on the cut
+            assert not here.contains(QPointF(bx, by))
 
 
 def test_direction_beyond_the_circle_still_chooses(qapp):
@@ -55,6 +70,6 @@ def test_turning_shows_the_next_side_and_keeps_the_direction(qapp, photo):
     w._last_vec = (0.0, -(RING + 10))  # pointer resting straight up
     w.turn(1)
     assert w.side == 1 and [a.id for a in w.actions] != first
-    assert w.hover == 0  # still pointing up: the first pill of the new side is chosen
+    assert w.hover == 0  # still pointing up: the first slice of the new side is chosen
     w.turn(-1)
     assert w.side == 0

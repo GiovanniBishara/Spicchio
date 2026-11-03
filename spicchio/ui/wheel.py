@@ -1,17 +1,20 @@
 """The wheel: a transparent, always-on-top window that accepts file drops.
 
-It opens under the cursor while a file is being dragged. Actions are light
-pills arranged on a circle; they fly out from the centre once Spicchio knows
-which files are coming. A pill is chosen by *direction*: the pointer can travel
-past the circle, and the name of the chosen action is written in the middle.
+It opens under the cursor while a file is being dragged. Actions are the
+segments of a tangerine: a ring of slices around a small core. They unfold
+once Spicchio knows which files are coming. A slice is chosen by *direction*:
+the pointer can travel past the ring, and the chosen slice lifts out, turns
+tangerine, and its full name is written in the core.
 """
 
 from __future__ import annotations
 
+import math
+from functools import lru_cache
 from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen, QRadialGradient
+from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QRadialGradient
 from PySide6.QtWidgets import QWidget
 
 from spicchio.actions import SIDE_NAMES, Action, sides_for
@@ -19,13 +22,17 @@ from spicchio.geometry import point_at, slice_at, slices
 from spicchio.ui import dragimage
 from spicchio.ui import style as S
 
-RING = 136        # radius of the circle the pills sit on
-CORE = 50         # radius of the central disc
+INNER = 62        # inner radius of the ring of slices
+RING = 150        # outer radius of the ring
+CORE = 48         # radius of the central disc
+GAP = 6           # width of the cut between two slices, in pixels (parallel, like a real fruit)
+ROUND = 11        # corner rounding of a slice
+LIFT = 7          # how far the chosen slice comes out
 DEAD = 40         # inside this radius nothing is chosen: dropping there cancels
-REACH = 104       # how far beyond the circle a direction still chooses a pill
-PILL_H = 34
-STAGGER_MS = 26
-FLY_MS = 360
+REACH = 90        # how far beyond the ring a direction still chooses a slice
+LABEL_W = 80      # labels wider than this wrap on two lines
+STAGGER_MS = 24
+FLY_MS = 380
 
 
 def _ease_out_back(t: float, s: float = 1.45) -> float:
@@ -35,6 +42,47 @@ def _ease_out_back(t: float, s: float = 1.45) -> float:
 
 def _ease_out(t: float) -> float:
     return 1 - (1 - t) ** 3
+
+
+def _polar(r: float, a: float) -> QPointF:
+    """Point at radius ``r`` and screen angle ``a`` (radians, clockwise from 3 o'clock)."""
+    return QPointF(r * math.cos(a), r * math.sin(a))
+
+
+@lru_cache(maxsize=16)
+def segment_path(n: int, index: int) -> QPainterPath:
+    """One slice of the ring, centred on (0, 0), with rounded corners and parallel cuts."""
+    sweep = 360 / n
+    a0 = math.radians(index * sweep - sweep / 2 - 90)
+    a1 = a0 + math.radians(sweep)
+    path = QPainterPath()
+    if n == 1:
+        path.addEllipse(QPointF(0, 0), RING, RING)
+        path.addEllipse(QPointF(0, 0), INNER, INNER)
+        return path
+
+    def cut(r: float) -> float:  # the angle a gap of GAP pixels takes at radius r
+        return math.asin(min(1.0, GAP / 2 / r))
+
+    o0, o1 = a0 + cut(RING), a1 - cut(RING)
+    i0, i1 = a0 + cut(INNER), a1 - cut(INNER)
+    co, ci = ROUND / RING, ROUND / INNER
+
+    def arc(r: float, start: float, end: float) -> None:
+        rect = QRectF(-r, -r, 2 * r, 2 * r)
+        path.arcTo(rect, -math.degrees(start), -math.degrees(end - start))  # Qt counts counter-clockwise
+
+    path.moveTo(_polar(INNER + ROUND, i0))
+    path.lineTo(_polar(RING - ROUND, o0))
+    path.quadTo(_polar(RING, o0), _polar(RING, o0 + co))
+    arc(RING, o0 + co, o1 - co)
+    path.quadTo(_polar(RING, o1), _polar(RING - ROUND, o1))
+    path.lineTo(_polar(INNER + ROUND, i1))
+    path.quadTo(_polar(INNER, i1), _polar(INNER, i1 - ci))
+    arc(INNER, i1 - ci, i0 + ci)
+    path.quadTo(_polar(INNER, i0), _polar(INNER + ROUND, i0))
+    path.closeSubpath()
+    return path
 
 
 class Wheel(QWidget):
@@ -61,17 +109,17 @@ class Wheel(QWidget):
         self._clock = QElapsedTimer()
         self._clock.start()
         self._opened_at = -10_000.0
-        self._pills_at = -10_000.0
+        self._slices_at = -10_000.0
         self._still = False          # renders: skip every animation
         self.time_override: float | None = None
-        self._sel: list[float] = []  # per-pill selection, eased towards 0/1
+        self._sel: list[float] = []  # per-slice selection, eased towards 0/1
         self._last_hide = 0.0
 
         self._tick = QTimer(self)
         self._tick.setInterval(16)
         self._tick.timeout.connect(self._step)
 
-        self._font_pill = S.font(13, QFont.Weight.DemiBold)
+        self._font_slice = S.font(13, QFont.Weight.DemiBold)
         self._font_title = S.font(15, QFont.Weight.DemiBold, display=True)
         self._font_caption = S.font(11)
 
@@ -120,7 +168,7 @@ class Wheel(QWidget):
     def _apply_side(self) -> None:
         self.actions = self.sides[self.side][1] if self.sides else []
         self._sel = [0.0] * len(self.actions)
-        self._pills_at = self._now()
+        self._slices_at = self._now()
         self.hover = None
         if self._last_vec is not None:  # the pointer may not move again before the drop
             dx, dy = self._last_vec
@@ -147,7 +195,7 @@ class Wheel(QWidget):
         return float(self._clock.elapsed())
 
     def _step(self) -> None:
-        moving = self.busy or self._now() - self._pills_at < FLY_MS + STAGGER_MS * len(self.actions) + 40
+        moving = self.busy or self._now() - self._slices_at < FLY_MS + STAGGER_MS * len(self.actions) + 40
         moving = moving or self._now() - self._opened_at < 260
         for i, v in enumerate(self._sel):
             target = 1.0 if i == self.hover else 0.0
@@ -230,75 +278,96 @@ class Wheel(QWidget):
         open_t = 1.0 if self._still else _ease_out(min(1.0, (now - self._opened_at) / 240))
         self._paint_guide(p, c, open_t)
         if self.actions:
-            self._paint_pills(p, c, now)
+            self._paint_slices(p, c, now)
         self._paint_core(p, c, open_t, now)
         if len(self.sides) > 1:
             self._paint_sides(p, c, open_t)
         p.end()
 
     def _paint_guide(self, p: QPainter, c: QPointF, open_t: float) -> None:
-        """The thin circle the pills hang on."""
-        r = RING * (0.6 + 0.4 * open_t)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(S.with_alpha(S.HAIRLINE, open_t), 1.0))
-        p.drawEllipse(c, r, r)
+        """Before the files are known: the empty ring, so the shape is there from the first frame."""
+        if self.actions:
+            return
+        ring = QPainterPath()
+        ring.addEllipse(c, RING * (0.85 + 0.15 * open_t), RING * (0.85 + 0.15 * open_t))
+        ring.addEllipse(c, INNER, INNER)
+        p.setOpacity(open_t)
+        p.setPen(QPen(S.HAIRLINE, 1.0))
+        p.setBrush(S.with_alpha(S.INK, 0.55))
+        p.drawPath(ring)
+        p.setOpacity(1.0)
 
-    def _pill_progress(self, i: int, now: float) -> float:
+    def _slice_progress(self, i: int, now: float) -> float:
         if self._still:
             return 1.0
-        return max(0.0, min(1.0, (now - self._pills_at - i * STAGGER_MS) / FLY_MS))
+        return max(0.0, min(1.0, (now - self._slices_at - i * STAGGER_MS) / FLY_MS))
 
-    def _paint_pills(self, p: QPainter, c: QPointF, now: float) -> None:
-        fm = QFontMetricsF(self._font_pill)
+    def _paint_slices(self, p: QPainter, c: QPointF, now: float) -> None:
+        n = len(self.actions)
         anyone = self.hover is not None
-        for s in slices(len(self.actions)):
-            i = s.index
-            t = self._pill_progress(i, now)
+        order = sorted(range(n), key=lambda i: self._sel[i] if i < len(self._sel) else 0.0)  # chosen on top
+        geometry = slices(n)
+        for i in order:
+            s = geometry[i]
+            t = self._slice_progress(i, now)
             if t <= 0:
                 continue
             g = self._sel[i] if i < len(self._sel) else 0.0
-            radius = RING * (0.25 + 0.75 * _ease_out_back(t)) + 6 * g
-            dx, dy = point_at(s.middle, radius)
-            centre = QPointF(c.x() + dx, c.y() + dy)
-            label = self.actions[i].label
-            w = max(64.0, fm.horizontalAdvance(label) + 30)
-            scale = (0.82 + 0.18 * _ease_out(t)) * (1 + 0.07 * g)
-            alpha = _ease_out(t)
-            recede = 1.0 if anyone and i != self.hover else 0.0  # others step back: softer text, no fading
+            path = segment_path(n, i)
+            lift_x, lift_y = point_at(s.middle, LIFT * g)
 
             p.save()
-            p.translate(centre)
-            p.scale(scale, scale)
-            p.setOpacity(alpha)
-            rect = QRectF(-w / 2, -PILL_H / 2, w, PILL_H)
-            rad = PILL_H / 2
+            p.translate(c.x() + lift_x, c.y() + lift_y)
+            grow = 0.72 + 0.28 * _ease_out_back(t, 1.2)
+            p.rotate(-16 * (1 - _ease_out(t)))  # the slices unfold, like opening the fruit
+            p.scale(grow, grow)
+            p.setOpacity(_ease_out(t))
 
-            # soft shadow, then a warm glow when chosen
-            p.setPen(Qt.PenStyle.NoPen)
-            for grow, a in ((6, 18), (3, 34), (1, 50)):
-                p.setBrush(QColor(0, 0, 0, a))
-                p.drawRoundedRect(rect.adjusted(-grow, -grow + 3, grow, grow + 3), rad + grow, rad + grow)
+            # shadow below, then a tangerine glow when chosen
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for width, alpha in ((14, 10), (8, 18), (3, 30)):
+                p.setPen(QPen(QColor(0, 0, 0, alpha), width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                              Qt.PenJoinStyle.RoundJoin))
+                p.drawPath(path.translated(0, 4))
             if g > 0.01:
-                glow = QRadialGradient(QPointF(0, 4), w * 0.75)
-                glow.setColorAt(0.0, S.with_alpha(S.TANGERINE, 0.38 * g))
-                glow.setColorAt(1.0, S.with_alpha(S.TANGERINE, 0.0))
-                p.setBrush(glow)
-                p.drawEllipse(QPointF(0, 4), w * 0.75, w * 0.42)
+                for width, alpha in ((26, 0.10), (14, 0.16), (6, 0.24)):
+                    p.setPen(QPen(S.with_alpha(S.TANGERINE, alpha * g), width, Qt.PenStyle.SolidLine,
+                                  Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+                    p.drawPath(path)
 
-            # body: resting surface fading into a tangerine gradient
-            body = QLinearGradient(0, -PILL_H / 2, 0, PILL_H / 2)
-            body.setColorAt(0.0, S.mix(S.SURFACE, S.TANGERINE_HI, g))
-            body.setColorAt(1.0, S.mix(S.SURFACE, S.TANGERINE_LO, g))
-            p.setBrush(body)
-            p.setPen(QPen(S.mix(S.HAIRLINE, QColor(255, 210, 180, 90), g), 1.0))
-            p.drawRoundedRect(rect, rad, rad)
-            # a whisper of light on the top edge
-            p.setPen(QPen(QColor(255, 255, 255, round(14 + 40 * g)), 1.0))
-            p.drawLine(QPointF(-w / 2 + rad, -PILL_H / 2 + 1.5), QPointF(w / 2 - rad, -PILL_H / 2 + 1.5))
+            # flesh: dark glass at rest, tangerine when chosen (darker near the core, light at the peel)
+            flesh = QRadialGradient(QPointF(0, 0), RING)
+            flesh.setColorAt(INNER / RING, S.mix(QColor(40, 38, 46, 246), S.TANGERINE_LO, g))
+            flesh.setColorAt(1.0, S.mix(QColor(24, 23, 28, 246), S.TANGERINE_HI, g))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(flesh)
+            p.drawPath(path)
 
-            p.setFont(self._font_pill)
+            # the fine lines of the pulp, barely there
+            p.save()
+            p.setClipPath(path)
+            p.setPen(QPen(S.mix(QColor(255, 255, 255, 9), QColor(255, 232, 205, 44), g), 1.0))
+            for k in (1, 2, 3):
+                a = s.start + s.sweep * k / 4
+                x0, y0 = point_at(a, INNER + 14)
+                x1, y1 = point_at(a, RING - 14)
+                p.drawLine(QPointF(x0, y0), QPointF(x1, y1))
+            p.restore()
+
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(S.mix(QColor(255, 255, 255, 24), QColor(255, 218, 190, 120), g), 1.0))
+            p.drawPath(path)
+
+            # label, upright, in the middle of the slice
+            lx, ly = point_at(s.middle, (INNER + RING) / 2 + 2)
+            p.setFont(self._font_slice)
+            recede = 1.0 if anyone and i != self.hover else 0.0  # the others step back: softer text
             p.setPen(S.mix(S.mix(S.TEXT, S.TEXT_SOFT, recede * (1 - g)), S.ON_ACCENT, g))
-            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
+            lines = self._wrap(self.actions[i].label, QFontMetricsF(self._font_slice), LABEL_W)[:2]
+            line_h = QFontMetricsF(self._font_slice).height()
+            top = ly - line_h * len(lines) / 2
+            for k, line in enumerate(lines):
+                p.drawText(QRectF(lx - 60, top + k * line_h, 120, line_h), Qt.AlignmentFlag.AlignCenter, line)
             p.restore()
 
     def _paint_core(self, p: QPainter, c: QPointF, open_t: float, now: float) -> None:
@@ -343,10 +412,9 @@ class Wheel(QWidget):
         p.setOpacity(1.0)
 
     def _paint_sides(self, p: QPainter, c: QPointF, open_t: float) -> None:
-        """Under the centre, a small capsule: ⇧ + the side showing + one dot per side.
+        """Under the ring, a small capsule: ⇧ + the side showing + one dot per side.
 
-        Compact on purpose, so it never touches the pills, and on its own dark
-        surface, so it reads on light and dark desktops alike.
+        On its own dark surface, so it reads on light and dark desktops alike.
         """
         name = SIDE_NAMES[self.sides[self.side][0]].upper()
         font = S.font(10, QFont.Weight.DemiBold)
@@ -356,7 +424,7 @@ class Wheel(QWidget):
         dots_w = n * 5 + (n - 1) * 4
         w = 14 + 10 + 6 + fm.horizontalAdvance(name) + 8 + dots_w + 12
         h = 22.0
-        r = QRectF(c.x() - w / 2, c.y() + CORE + 14, w, h)
+        r = QRectF(c.x() - w / 2, c.y() + RING + LIFT + 12, w, h)
         p.setOpacity(open_t)
         p.setPen(QPen(S.HAIRLINE, 1.0))
         p.setBrush(QColor(22, 21, 26, 240))

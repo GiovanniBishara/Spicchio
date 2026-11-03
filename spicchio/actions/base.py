@@ -1,4 +1,4 @@
-"""The action model and the registry that decides which pills to show.
+"""The action model and the registry that decides which slices to show.
 
 Actions are grouped in *sides* of the wheel: Convert, Tools and Actions. Shift
 opens the first side that has something for the dropped files; tapping Shift
@@ -62,7 +62,7 @@ class Action:
             return False
         if not all(kind_of(p) in self.kinds for p in paths):
             return False
-        # no "PNG" pill when every file is already a PNG
+        # no "PNG" slice when every file is already a PNG
         return not (self.skip_ext and all(p.suffix.lower() in self.skip_ext for p in paths))
 
     def __call__(self, paths: Sequence[Path]) -> Result:
@@ -96,7 +96,7 @@ def all_actions() -> list[Action]:
 def actions_for(paths: Sequence[Path], side: str | None = None, limit: int = 8) -> list[Action]:
     """The actions that make sense for these files, in registry order.
 
-    With ``side`` only that side of the wheel, at most ``limit`` pills.
+    With ``side`` only that side of the wheel, at most ``limit`` slices.
     """
     if not paths:
         return []

@@ -2,7 +2,7 @@
 
 ## 0.2.0 (unreleased)
 
-- **Three sides on the wheel: Convert, Tools, Actions.** Tap Shift again, press Tab or scroll to turn it. Each side keeps to a few pills, so nothing is crowded.
+- **Three sides on the wheel: Convert, Tools, Actions.** Tap Shift again, press Tab or scroll to turn it. Each side keeps to a few slices, so nothing is crowded.
 - **Undo**: the notification has an Undo button that sends the results to the Recycle Bin (never the originals).
 - **Working note** for long jobs: the wheel steps aside and a small notification with a spinner shows progress.
 - **Recent results** in the tray menu.
