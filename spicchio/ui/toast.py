@@ -57,7 +57,7 @@ class Toast(QWidget):
         self._title, self._body, self._error, self._target = title, body, error, target
         fm_t, fm_b = QFontMetricsF(self._font_t), QFontMetricsF(self._font_b)
         text_w = max(fm_t.horizontalAdvance(title), fm_b.horizontalAdvance(body) if body else 0)
-        w = min(max(text_w + 72, 240), 460)
+        w = min(max(text_w + 92, 240), 520)
         h = 62 if body else 46
         self.setFixedSize(round(w + 2 * PAD), h + 2 * PAD)
         pos = QCursor.pos()

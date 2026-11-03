@@ -214,22 +214,11 @@ class Wheel(QWidget):
         p.end()
 
     def _paint_guide(self, p: QPainter, c: QPointF, open_t: float) -> None:
-        """The thin circle the pills hang on, and the arc that points at the chosen one."""
+        """The thin circle the pills hang on."""
         r = RING * (0.6 + 0.4 * open_t)
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.setPen(QPen(S.with_alpha(S.HAIRLINE, open_t), 1.0))
         p.drawEllipse(c, r, r)
-        if self.hover is None or not self.actions:
-            return
-        s = slices(len(self.actions))[self.hover]
-        g = self._sel[self.hover] if self.hover < len(self._sel) else 1.0
-        sweep = (s.sweep - 10) * g
-        pen = QPen(S.with_alpha(S.TANGERINE, 0.9 * g), 2.2)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(pen)
-        rect = QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r)
-        start_qt = 90 - (s.middle - sweep / 2)
-        p.drawArc(rect, round(start_qt * 16), round(-sweep * 16))
 
     def _pill_progress(self, i: int, now: float) -> float:
         if self._still:
@@ -251,7 +240,8 @@ class Wheel(QWidget):
             label = self.actions[i].label
             w = max(64.0, fm.horizontalAdvance(label) + 30)
             scale = (0.82 + 0.18 * _ease_out(t)) * (1 + 0.07 * g)
-            alpha = _ease_out(t) * (1.0 if not anyone or i == self.hover else 0.58 + 0.42 * g)
+            alpha = _ease_out(t)
+            recede = 1.0 if anyone and i != self.hover else 0.0  # others step back: softer text, no fading
 
             p.save()
             p.translate(centre)
@@ -284,7 +274,7 @@ class Wheel(QWidget):
             p.drawLine(QPointF(-w / 2 + rad, -PILL_H / 2 + 1.5), QPointF(w / 2 - rad, -PILL_H / 2 + 1.5))
 
             p.setFont(self._font_pill)
-            p.setPen(S.mix(S.TEXT, S.ON_ACCENT, g))
+            p.setPen(S.mix(S.mix(S.TEXT, S.TEXT_SOFT, recede * (1 - g)), S.ON_ACCENT, g))
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
             p.restore()
 
@@ -292,7 +282,7 @@ class Wheel(QWidget):
         r = CORE * (0.7 + 0.3 * _ease_out_back(open_t, 1.2)) if not self._still else CORE
         p.setOpacity(open_t)
         p.setPen(Qt.PenStyle.NoPen)
-        for grow, a in ((10, 16), (5, 30), (2, 46)):
+        for grow, a in ((7, 12), (3, 24), (1, 36)):
             p.setBrush(QColor(0, 0, 0, a))
             p.drawEllipse(QPointF(c.x(), c.y() + 3), r + grow, r + grow)
         disc = QRadialGradient(QPointF(c.x(), c.y() - r * 0.8), r * 2.0)

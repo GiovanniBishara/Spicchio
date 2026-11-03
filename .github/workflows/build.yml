@@ -1,0 +1,51 @@
+name: Build
+
+# Builds the downloadable apps. Called by CI on every push to main and by
+# the Release workflow when a version tag (v0.1.0, ...) is pushed.
+on:
+  workflow_call:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]"
+      - name: Build Spicchio.exe
+        run: >
+          pyinstaller --noconfirm --noconsole --onefile --name Spicchio --icon assets/spicchio.ico
+          --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32
+          spicchio/__main__.py
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/Spicchio.exe -DestinationPath Spicchio-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Spicchio-windows
+          path: Spicchio-windows.zip
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]"
+      - name: Build Spicchio.app
+        run: >
+          pyinstaller --noconfirm --windowed --name Spicchio --icon assets/spicchio.png
+          --osx-bundle-identifier io.github.giovannibishara.spicchio
+          --hidden-import pynput.keyboard._darwin --hidden-import pynput.mouse._darwin
+          spicchio/__main__.py
+      - name: Menu-bar app (no Dock icon) and zip
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" dist/Spicchio.app/Contents/Info.plist
+          ditto -c -k --keepParent dist/Spicchio.app Spicchio-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Spicchio-macOS
+          path: Spicchio-macOS.zip

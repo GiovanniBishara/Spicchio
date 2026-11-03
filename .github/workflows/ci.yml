@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -9,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
         python: ["3.11", "3.13"]
     runs-on: ${{ matrix.os }}
     env:
@@ -28,27 +29,7 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest -q
-      - name: Render the wheel
-        if: matrix.python == '3.13'
-        run: python scripts/render_wheel.py renders
-      - uses: actions/upload-artifact@v4
-        if: matrix.python == '3.13'
-        with:
-          name: wheel-renders-${{ runner.os }}
-          path: renders/
 
   build:
     needs: test
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: pip install -e ".[dev]"
-      - name: Build Spicchio.exe
-        run: pyinstaller --noconfirm --noconsole --onefile --name Spicchio --icon assets/spicchio.ico --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 spicchio/__main__.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Spicchio-windows
-          path: dist/Spicchio.exe
+    uses: ./.github/workflows/build.yml

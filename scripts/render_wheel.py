@@ -76,6 +76,7 @@ def main(out: Path) -> None:
     paint_mark(p, QPointF(128, 128), 118)
     p.end()
     on_backgrounds(icon, out, "icon")
+    icon.save(str(out / "icon.png"))  # transparent, used for assets/
     print(f"renders in {out}")
 
 

@@ -1,0 +1,29 @@
+name: Release
+
+# Push a tag like v0.1.0 to publish a GitHub Release with the Windows and macOS apps.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/Spicchio-windows.zip dist/Spicchio-macOS.zip \
+            --title "Spicchio $GITHUB_REF_NAME" --notes-file docs/release-notes.md
